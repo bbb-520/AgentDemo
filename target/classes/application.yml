@@ -1,0 +1,42 @@
+# ============================================================
+# TravelAgent 后端配置（契约：BACKEND_REQUIREMENTS §3 / §8）
+# ============================================================
+
+server:
+  # 联调/演示统一端口：前端 Vite 代理与 CORS 直连均指向它
+  port: 18080
+
+spring:
+  ai:
+    openai:
+      # 阿里百炼 DashScope（OpenAI 兼容模式）
+      # 密钥通过环境变量注入，勿明文入库：
+      #   本地演示可先 export QWEN_API_KEY=sk-xxx 再启动
+      api-key: sk-ws-H.PMPYEDX.4o9E.MEUCIQCqGrgObbDV9cYzU3RNcKtocWO6dQMv6qnwUVzLtRc4ewIgE-FoZnAKHS75jSrvdVCUYCSTAMBpQvPaH7XfAnMVwZU
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      chat:
+        options:
+          # chat.options.* 由 config/OpenAiProperties(@ConfigurationProperties prefix=spring.ai.openai)
+          # 绑定，并被 config/AiConfiguration 显式装配为 OpenAiChatModel 的 defaultOptions。
+          # 本项目手动构建模型（指向兼容端点），绕过了官方自动装配，因此不设置就不会生效；
+          # 要固定采样温度可放开下行（null = 服务端默认）：
+          # temperature: 0.7
+          model: qwen-turbo   # 或 qwen-plus / qwen-max
+
+
+# Tavily 搜索（getAttraction 的数据源；getWeather 的兜底数据源，首选为 Open-Meteo）
+tavily:
+  api-key: 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
+  base-url: https://api.tavily.com
+  search-depth: advanced
+  max-results: 5
+  include-answer: true
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  level:
+    root: INFO
+    org.springframework.ai: DEBUG   # 观察多轮工具调用（契约 §3）
+    org.springframework.ai.chat.client: DEBUG
