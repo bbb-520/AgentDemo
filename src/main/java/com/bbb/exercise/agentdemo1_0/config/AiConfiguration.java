@@ -1,11 +1,11 @@
 package com.bbb.exercise.agentdemo1_0.config;
 
+import com.bbb.exercise.agentdemo1_0.memory.lru.LruInMemoryChatMemoryRepository;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -44,15 +44,27 @@ import java.util.List;
  * 任何含 {@code @Tool} 方法的 Bean 都会被自动发现，本类不关心具体有哪些工具。
  */
 @Configuration
-@EnableConfigurationProperties(OpenAiProperties.class)
+@EnableConfigurationProperties({OpenAiProperties.class, ChatMemoryProperties.class})
 public class AiConfiguration {
 
-    /** 内存聊天记忆（滑动窗口），用于保存对话上下文 */
+    /**
+     * 一级 LRU 内存窗口（替换 Spring AI 默认的无界 {@code InMemoryChatMemoryRepository}）。
+     *
+     * <p><b>修复点（P1-4 + P1-5）</b>：
+     * <ul>
+     *   <li>会话级 LRU 由自建 {@link LruInMemoryChatMemoryRepository} 提供，
+     *       容量上限 = {@code chat.memory.max-conversations}（配置生效，不再泄漏）；</li>
+     *   <li>消息级窗口仍由 {@link MessageWindowChatMemory} 处理，
+     *       窗口大小 = {@code chat.memory.window-size}（配置生效，不再硬编码）。</li>
+     * </ul>
+     */
     @Bean
-    public ChatMemory chatMemory() {
+    public ChatMemory chatMemory(ChatMemoryProperties memoryProps) {
+        int maxConv = memoryProps.getMaxConversations();
+        LruInMemoryChatMemoryRepository repo = new LruInMemoryChatMemoryRepository(maxConv);
         return MessageWindowChatMemory.builder()
-                .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                .maxMessages(50)
+                .chatMemoryRepository(repo)
+                .maxMessages(memoryProps.getWindowSize())
                 .build();
     }
 

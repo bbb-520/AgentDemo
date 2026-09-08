@@ -1,6 +1,4 @@
-package com.bbb.exercise.agentdemo1_0.support;
-
-import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
+package com.bbb.exercise.agentdemo1_0.utils;
 
 
 public final class ConversationKeys {

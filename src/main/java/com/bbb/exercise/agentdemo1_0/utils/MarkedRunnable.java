@@ -1,4 +1,4 @@
-package com.bbb.exercise.agentdemo1_0.common.utils;
+package com.bbb.exercise.agentdemo1_0.utils;
 
 import org.slf4j.MDC;
 

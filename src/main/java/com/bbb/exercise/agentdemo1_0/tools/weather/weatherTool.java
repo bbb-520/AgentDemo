@@ -1,10 +1,12 @@
-package com.bbb.exercise.agentdemo1_0.tools;
+package com.bbb.exercise.agentdemo1_0.tools.weather;
 
-import com.bbb.exercise.agentdemo1_0.tools.weather.WeatherService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+
+import com.bbb.exercise.agentdemo1_0.utils.AssertUtils;
+import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
 
 /**
  * 查询城市的实时天气。
@@ -35,9 +37,7 @@ public class weatherTool {
      */
     @Tool(description = "查询指定城市的实时天气，返回温度、天气状况、湿度、风速等信息")
     public String getWeather(@ToolParam(description = "要查询天气的城市名称，例如 北京") String city) {
-        if (city == null || city.isBlank()) {
-            throw new IllegalArgumentException("城市名称不能为空");
-        }
-        return weatherService.getWeather(city.trim());
+        AssertUtils.isNotBlank(city, "城市名称不能为空");
+        return weatherService.getWeather(StringUtils.trim(city));
     }
 }

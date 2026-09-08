@@ -1,6 +1,8 @@
 package com.bbb.exercise.agentdemo1_0.agent;
 
+import com.bbb.exercise.agentdemo1_0.config.ChatMemoryProperties;
 import com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum;
+import com.bbb.exercise.agentdemo1_0.memory.RedisChatMemoryRepository;
 import com.bbb.exercise.agentdemo1_0.vo.ChatEventVO;
 import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,11 +76,17 @@ public class AgentRunner {
     /** 系统提示词（config/AiConfiguration 读取 classpath:system_prompt 暴露的 Bean） */
     private final String systemPrompt;
 
+    /** Redis 二级长期会话历史（双写目标 + 惰性回填来源） */
+    private final RedisChatMemoryRepository redisRepo;
+
+    /** 会话记忆配置（窗口大小、压缩参数等） */
+    private final ChatMemoryProperties chatMemoryProperties;
+
     /**
-     * 阻塞式对话（供命令行演示与同步接口使用；走 ChatClient 默认工具执行 + 记忆顾问）
+     * 阻塞式对话（供命令行演示与同步接口使用；走 ChatClient 默认工具执行 + 记忆顾问）。
      *
-     * <p>系统提示、日志/记忆 Advisor、工具列表均为 ChatClient 的默认配置，
-     * 此处仅需指定会话 id 与用户问题。
+     * <p><b>修复 P0-2</b>：改造前同步调用 {@code chatClient.call()} 时 Redis 二级存储不会被写入，
+     * 重启即丢。改造后在返回前双写（内存窗口 + Redis 二级存储），与流式路径行为一致。
      *
      * @param question       用户问题
      * @param conversationId 会话 id，为空则用默认会话
@@ -100,6 +108,17 @@ public class AgentRunner {
                 ? null : response.getMetadata().getUsage();
         Integer prompt = usage == null ? null : usage.getPromptTokens();
         Integer completion = usage == null ? null : usage.getCompletionTokens();
+
+        // ===== 修复 P0-2：同步路径也双写到 Redis =====
+        if (StringUtils.isNotBlank(answer)) {
+            try {
+                redisRepo.appendMessages(conversationId,
+                        List.of(new UserMessage(question), new AssistantMessage(answer)));
+            } catch (Exception e) {
+                log.error("[agent] 同步结果写入 Redis 失败 sessionId={}", conversationId, e);
+            }
+        }
+
         log.info("[agent] 完成 sessionId={} 耗时={}ms tokens=prompt={},completion={} err=null",
                 conversationId, System.currentTimeMillis() - start, prompt, completion);
         return answer;
@@ -143,23 +162,57 @@ public class AgentRunner {
     /**
      * 输出被中途取消/停止时，把已生成的部分内容写入会话记忆，
      * 避免多轮对话的上下文出现断层。
-     * TODO 存储到Redis中
+     *
+     * <p>双写内存窗口与 Redis（与正常问答一致），保证二级记忆数据同步。
      */
     public void savePartialResponse(String conversationId, String content) {
         if (StringUtils.isBlank(content)) {
             return;
         }
-        chatMemory.add(conversationId, List.of(new AssistantMessage(content)));
+        try {
+            chatMemory.add(conversationId, List.of(new AssistantMessage(content)));
+        } catch (Exception e) {
+            log.error("[agent] 中断回写内存窗口失败 sessionId={}", conversationId, e);
+        }
+        try {
+            redisRepo.appendMessages(conversationId, List.of(new AssistantMessage(content)));
+        } catch (Exception e) {
+            log.error("[agent] 中断回写 Redis 历史失败 sessionId={}", conversationId, e);
+        }
     }
 
-    /** 读取某个会话的历史消息 */
+    /**
+     * 读取某个会话的历史消息。
+     *
+     * <p><b>修复 P2-7</b>：改造前直接 {@code chatMemory.get()}，不经过惰性回填，
+     * 导致应用重启后调用本方法返回空、但发起流式对话时又能"记住"（{@code loadConversationContext} 会回填），
+     * 两条路径行为割裂。改造后增加惰性回填：内存窗口为空时从 Redis 取最近 N 条并写回内存。
+     */
     public List<Message> history(String conversationId) {
-        return chatMemory.get(conversationId);
+        if (conversationId == null || conversationId.isBlank()) {
+            return chatMemory.get(conversationId);
+        }
+        List<Message> fromMem = chatMemory.get(conversationId);
+        if (fromMem != null && !fromMem.isEmpty()) {
+            return fromMem;
+        }
+        // 内存为空 → 走惰性回填（与 loadConversationContext 共用同一来源）
+        log.info("[agent] /history 触发惰性回填 sessionId={}", conversationId);
+        return lazyBackfillFromRedis(conversationId);
     }
 
-    /** 清空某个会话的历史消息 */
+    /**
+     * 清空某个会话的历史消息。
+     *
+     * <p>双清：内存窗口 + Redis 长期历史（含序号键、活跃键），保证二级记忆同步清除。
+     */
     public void clearHistory(String conversationId) {
         chatMemory.clear(conversationId);
+        try {
+            redisRepo.deleteByConversationId(conversationId);
+        } catch (Exception e) {
+            log.warn("[agent] 清空 Redis 历史失败 sessionId={}", conversationId, e);
+        }
     }
 
     // =====================================================================
@@ -193,10 +246,41 @@ public class AgentRunner {
     private void loadConversationContext(AgentTurn turn) {
         turn.messages.add(new SystemMessage(systemPrompt));
         List<Message> history = chatMemory.get(turn.conversationId);
+        // 惰性回填：内存窗口未命中（重启或新会话首次进入）时，从 Redis 取最近 N 条回填，
+        // 保证二级记忆在重启后短期不失忆。回填后内存窗口即持有最新数据，后续命中内存。
+        if (history == null || history.isEmpty()) {
+            history = lazyBackfillFromRedis(turn.conversationId);
+        }
         if (history != null) {
             turn.messages.addAll(new ArrayList<>(history));
         }
         turn.messages.add(new UserMessage(turn.question));
+    }
+
+    /**
+     * 惰性回填：内存窗口为空时，从 Redis 取最近 {@code windowSize} 条历史回填内存窗口，
+     * 供本次对话作为上下文（含已生成的摘要 SystemMessage）。
+     *
+     * <p>回填失败不影响主流程（返回空列表，LLM 视作无历史）。
+     * 与「重启即短期失忆」的取舍：采用惰性回填 + 缓存淘汰，而非启动时全量回填。
+     */
+    private List<Message> lazyBackfillFromRedis(String conversationId) {
+        try {
+            List<Message> all = redisRepo.findByConversationId(conversationId);
+            if (all == null || all.isEmpty()) {
+                return List.of();
+            }
+            int windowSize = chatMemoryProperties.getWindowSize();
+            int from = Math.max(0, all.size() - windowSize);
+            List<Message> recent = new ArrayList<>(all.subList(from, all.size()));
+            // 回填到内存窗口，后续对话直接命中内存
+            chatMemory.add(conversationId, recent);
+            log.info("[agent] 惰性回填 sessionId={} 回填条数={}", conversationId, recent.size());
+            return recent;
+        } catch (Exception e) {
+            log.warn("[agent] 惰性回填失败 sessionId={} err={}", conversationId, e.toString());
+            return List.of();
+        }
     }
 
     /**
@@ -301,11 +385,18 @@ public class AgentRunner {
         if (finalText.equals(FIXED_FALLBACK)) {
             log.warn("[agent] 模型未输出最终答案，使用兜底文字 sessionId={}", turn.conversationId);
         }
+        // 双写：内存窗口（LLM 实时上下文，滑动窗口）+ Redis（长期历史，追加不覆盖）
         try {
             chatMemory.add(turn.conversationId,
                     List.of(new UserMessage(turn.question), new AssistantMessage(finalText)));
         } catch (Exception e) {
-            log.error("[agent] 写入会话记忆失败 sessionId={}", turn.conversationId, e);
+            log.error("[agent] 写入内存窗口失败 sessionId={}", turn.conversationId, e);
+        }
+        try {
+            redisRepo.appendMessages(turn.conversationId,
+                    List.of(new UserMessage(turn.question), new AssistantMessage(finalText)));
+        } catch (Exception e) {
+            log.error("[agent] 写入 Redis 历史失败 sessionId={}", turn.conversationId, e);
         }
 
         return Flux.concat(

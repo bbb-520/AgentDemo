@@ -1,54 +1,157 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
-	<groupId>com.bbb.exercise</groupId>
-	<artifactId>agentDemo1_0</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>agentDemo1_0</name>
-	<description>agentDemo1_0</description>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
-	<properties>
-		<java.version>21</java.version>
-	</properties>
-	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter</artifactId>
-		</dependency>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.12</version>
+        <relativePath/>
+    </parent>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-		</plugins>
-	</build>
+    <groupId>com.bbb.exercise</groupId>
+    <artifactId>agentDemo1_0</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>agentDemo1_0</name>
+    <description>agentDemo1_0</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <spring-ai.version>1.0.5</spring-ai.version>
+    </properties>
+
+    <dependencies>
+
+
+        <!-- 唯一 Web 栈：Spring WebFlux（响应式）。
+             注意：不能再引入 spring-boot-starter-web(MVC)，否则 DispatcherServlet 抢注、
+             @RestController 返回 Flux 的 SSE 接口会退化成 MVC 行为（契约 BACKEND_REQUIREMENTS §3） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Jackson -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- 工具包依赖：common.utils 下的工具类基于 hutool 封装 -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-all</artifactId>
+            <version>5.8.32</version>
+        </dependency>
+
+        <!-- Spring AI Client Chat：提供 ChatClient / Advisor / ChatMemory（1.0 GA 后
+             原 spring-ai-core 拆分为 spring-ai-model / spring-ai-client-chat 等模块） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
+
+        <!-- Spring AI OpenAI：提供 OpenAI 兼容的 ChatModel（OpenAiChatModel），
+             可指向任何 OpenAI 兼容端点（本项目指向 Qwen 百炼 dashscope compatible-mode）。
+             传递引入 spring-ai-model（含 @Tool / ToolCallback / ChatMemory 等核心 API） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+
+        <!-- Redis：会话记忆二级存储（长期历史 + 高级查询 + 摘要）。
+             本项目保持 Spring AI 1.0.5 基线，不引入 2.0+ 的官方
+             spring-ai-starter-model-chat-memory-repository-redis（其要求 Redis Stack），
+             而是用普通 Redis + 自定义 RedisChatMemoryRepository 实现。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Jackson JSR310：会话记忆消息序列化需要 Java 8 时间类型支持 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- commons-pool2：Lettuce 连接池必需。
+             spring-boot-starter-data-redis 不传递引入它（optional 依赖），
+             一旦配置 spring.data.redis.lettuce.pool.enabled=true 就必须显式加，
+             否则启动报 NoClassDefFoundError: org/apache/commons/pool2/impl/GenericObjectPoolConfig。
+             版本由 spring-boot-starter-parent 统一管理。 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
+        <!-- 监控（可选，离线环境本地仓库缺 3.4.12 工件暂不启用）：
+             需要联网拉取后放开注释即可启用 /actuator 健康与指标端点，
+             配合 spring-ai 内置 Micrometer Observation 观测 LLM 调用。
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        -->
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>aliyun</id>
+            <name>Aliyun Maven</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+        </repository>
+    </repositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- 保留方法参数名，@Tool 反射生成工具 Schema 时需要 -->
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

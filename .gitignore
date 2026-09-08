@@ -1,0 +1,28 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# 构建产物
+target/
+build/
+*.class
+*.jar
+*.war
+
+# Agent 私有工作日志（不入仓）
+.workbuddy/memory/*.md
+!/.workbuddy/memory/MEMORY.md
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志 / 临时
+*.log
+*.tmp
+*.swp
+*.bak

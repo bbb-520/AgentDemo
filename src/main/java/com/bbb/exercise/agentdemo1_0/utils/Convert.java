@@ -1,4 +1,4 @@
-package com.bbb.exercise.agentdemo1_0.common.utils;
+package com.bbb.exercise.agentdemo1_0.utils;
 
 /**
  * 对原对象进行计算，设置到目标对象中。

@@ -4,7 +4,7 @@ import com.bbb.exercise.agentdemo1_0.agent.AgentRunner;
 import com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum;
 import com.bbb.exercise.agentdemo1_0.service.ChatService;
 import com.bbb.exercise.agentdemo1_0.service.impl.ChatServiceImpl;
-import com.bbb.exercise.agentdemo1_0.support.ConversationKeys;
+import com.bbb.exercise.agentdemo1_0.utils.ConversationKeys;
 import com.bbb.exercise.agentdemo1_0.vo.ChatEventVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;

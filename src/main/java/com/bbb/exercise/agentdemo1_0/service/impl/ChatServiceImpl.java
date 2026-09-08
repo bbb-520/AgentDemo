@@ -1,9 +1,14 @@
 package com.bbb.exercise.agentdemo1_0.service.impl;
 
 import com.bbb.exercise.agentdemo1_0.agent.AgentRunner;
+import com.bbb.exercise.agentdemo1_0.config.ChatMemoryProperties;
+import com.bbb.exercise.agentdemo1_0.dto.MessageWithConversation;
+import com.bbb.exercise.agentdemo1_0.dto.PageResult;
 import com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum;
+import com.bbb.exercise.agentdemo1_0.memory.MemoryCompressionService;
+import com.bbb.exercise.agentdemo1_0.memory.RedisChatMemoryRepository;
 import com.bbb.exercise.agentdemo1_0.service.ChatService;
-import com.bbb.exercise.agentdemo1_0.support.ConversationKeys;
+import com.bbb.exercise.agentdemo1_0.utils.ConversationKeys;
 import com.bbb.exercise.agentdemo1_0.vo.ChatEventVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,8 +25,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
 
+import static com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum.DATA;
+
 /**
  * 聊天服务实现，提供流式对话、同步对话、停止、历史记录和清理功能。
+ *
+ * <p>新增二级记忆能力：分页历史 / 全量消息 / 手动压缩，委托
+ * {@link RedisChatMemoryRepository} 与 {@link MemoryCompressionService}。
  */
 @Slf4j
 @Service
@@ -29,6 +39,15 @@ import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
 public class ChatServiceImpl implements ChatService {
 
     private final AgentRunner agentRunner;
+
+    /** Redis 二级长期会话历史（分页 / 全量查询） */
+    private final RedisChatMemoryRepository redisRepo;
+
+    /** 会话压缩服务（手动触发压缩） */
+    private final MemoryCompressionService compressionService;
+
+    /** 会话记忆配置（取 Redis 全量查询的上限） */
+    private final ChatMemoryProperties chatMemoryProperties;
 
     /** 标记每个会话是否正在生成回复 */
     private static final Map<String, Boolean> GENERATING = new ConcurrentHashMap<>();
@@ -39,7 +58,8 @@ public class ChatServiceImpl implements ChatService {
 
     /**
      * 流式聊天：将问题交给 AgentRunner，把返回的直播事件流原样透传给前端。
-     * 时把错误替换为 ERROR(1004) 事件（保持既有契约）。
+     * 出错时把错误替换为 ERROR(1004) 事件（保持既有契约）。
+     *
      * @param question  用户问题
      * @param sessionId 会话ID
      * @return 直播事件流
@@ -70,7 +90,7 @@ public class ChatServiceImpl implements ChatService {
                 .takeWhile(event -> Boolean.TRUE.equals(GENERATING.get(conversationId)))
                 // 仅累计 DATA 文本（最终回答），用于中断时保存部分回答
                 .doOnNext(event -> {
-                    if (event.getEventType() == ChatEventTypeEnum.DATA.getValue()
+                    if (event.getEventType() == DATA.getValue()
                             && event.getEventData() instanceof String text && StringUtils.isNotEmpty(text)) {
                         output.append(text);
                     }
@@ -104,7 +124,7 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 获取会话历史消息列表，格式化为可读字符串。
+     * 获取会话历史消息列表（一级内存窗口），格式化为可读字符串。
      */
     @Override
     public List<String> history(String sessionId) {
@@ -125,11 +145,42 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 清除指定会话的历史记录。
+     * 清除指定会话的历史记录（双清：内存窗口 + Redis）。
      */
     @Override
     public void clear(String sessionId) {
         agentRunner.clearHistory(ConversationKeys.resolve(sessionId));
+    }
+
+    /**
+     * 分页查询会话历史（Redis 二级存储，按时间升序）。
+     */
+    @Override
+    public PageResult<MessageWithConversation> pageHistory(String sessionId, int page, int size) {
+        if (page < 1) {
+            page = 1;
+        }
+        if (size < 1) {
+            size = 20;
+        }
+        return redisRepo.pageByConversation(ConversationKeys.resolve(sessionId), page, size);
+    }
+
+    /**
+     * 按会话 ID 获取全部消息（Redis 二级存储，含摘要）。
+     */
+    @Override
+    public List<MessageWithConversation> messagesByConversation(String sessionId) {
+        int max = chatMemoryProperties.getRedis().getMaxMessagesPerConversation();
+        return redisRepo.pageByConversation(ConversationKeys.resolve(sessionId), 1, max).getRecords();
+    }
+
+    /**
+     * 手动触发会话压缩（生成摘要并双写 Redis 与内存窗口）。
+     */
+    @Override
+    public String summarize(String sessionId) {
+        return compressionService.summarize(ConversationKeys.resolve(sessionId));
     }
 
     /**
