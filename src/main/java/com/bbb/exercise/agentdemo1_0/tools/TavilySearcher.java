@@ -1,11 +1,10 @@
 package com.bbb.exercise.agentdemo1_0.tools;
 
-import com.bbb.exercise.agentdemo1_0.tools.weather.weatherTool;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
+import com.bbb.exercise.agentdemo1_0.config.TavilyProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -14,53 +13,51 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.time.Duration;
 import java.util.Map;
 
+
 /**
- * Tavily {@code /search} 调用的薄壳，封装天气/景点两个工具的公共部分：
- * <ul>
- *     <li>统一组装请求体（{@code query + search_depth + max_results + include_answer}）；</li>
- *     <li>解析响应：优先取 {@code answer} 字段，缺失则回退拼接 {@code results[].content}；</li>
- *     <li>统一错误抛出（HTTP 4xx/5xx、Tavily 无内容），保持上层工具的「原始异常 → 工具失败事件」契约。</li>
- * </ul>
+ * Tavily 联网搜索封装（被 {@code attractionTool} 与 {@code TavilyWeatherProvider} 复用）。
  *
- * <p>工具类只关心业务：{@link weatherTool#getWeather}、{@link attractionTool#getAttraction}
- * 各自把请求字符串拼好交给本类，避免 Tavily 调用样板代码重复。
+ * <p>复用 {@link com.bbb.exercise.agentdemo1_0.config.TavilyConfig} 提供的
+ * {@code tavilyWebClient} 发起 POST {@code /search}，解析优先取 {@code answer} 字段，
+ * 缺失时退化为拼接 {@code results[].content}。
  */
 @Slf4j
 @Component
 public class TavilySearcher {
 
     private static final String SEARCH_PATH = "/search";
+    /** 单次搜索的阻塞等待上限 */
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     private final WebClient tavilyWebClient;
 
-    @Value("${tavily.search-depth}")
-    private String searchDepth;
+    private final TavilyProperties properties;
 
-    @Value("${tavily.max-results}")
-    private int maxResults;
-
-    @Value("${tavily.include-answer}")
-    private boolean includeAnswer;
-
-    public TavilySearcher(@Qualifier("tavilyWebClient") WebClient tavilyWebClient) {
+    public TavilySearcher(@Qualifier("tavilyWebClient") WebClient tavilyWebClient,
+                          TavilyProperties properties) {
         this.tavilyWebClient = tavilyWebClient;
+        this.properties = properties;
     }
 
+
     /**
-     * 向 Tavily 发起一次搜索，优先返回 AI 摘要 {@code answer}；缺失时拼接
-     * {@code results[].content} 兜底；二者皆空时抛 {@link IllegalStateException}。
+     * 执行一次搜索。
      *
-     * @param context 业务上下文，写入日志便于排查（建议：{@code 工具名:关键参数}）
-     * @param query   Tavily 搜索字符串
-     * @return Tavily 返回的可读文本
+     * @param context 仅用于日志定位（例如 {@code weather:北京}）
+     * @param query   实际检索语句
+     * @return 搜索结果文本（answer 或 results 正文拼接）
+     * @throws RuntimeException 请求失败或返回内容为空
      */
     public String search(String context, String query) {
+        // Map.of 不允许 null 值：先显式校验，避免以 NPE 的形式暴露给上层工具
+        if (StringUtils.isBlank(query)) {
+            throw new IllegalArgumentException("Tavily 搜索内容不能为空, ctx=" + context);
+        }
         Map<String, Object> body = Map.of(
                 "query", query,
-                "search_depth", searchDepth,
-                "max_results", maxResults,
-                "include_answer", includeAnswer);
+                "search_depth", properties.getSearchDepth(),
+                "max_results", properties.getMaxResults(),
+                "include_answer", properties.isIncludeAnswer());
         log.debug("Tavily 调用, ctx={}, query={}", context, query);
 
         try {
@@ -69,11 +66,13 @@ public class TavilySearcher {
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body)
                     .retrieve()
+                    // HTTP 4xx/5xx 统一转成带响应体的异常，便于定位
                     .onStatus(HttpStatusCode::isError, resp -> resp.bodyToMono(String.class)
                             .defaultIfEmpty("")
                             .map(bodyText -> new IllegalStateException(
                                     "Tavily 返回错误: HTTP " + resp.statusCode() + ", body=" + bodyText)))
                     .bodyToMono(JsonNode.class)
+                    // 工具方法是同步签名，此处阻塞等待（调用发生在 boundedElastic 之外的模型回调线程）
                     .block(TIMEOUT);
             return parse(context, response);
         } catch (Exception e) {

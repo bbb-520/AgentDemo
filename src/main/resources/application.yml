@@ -1,81 +1,79 @@
 server:
-  # 联调/演示统一端口：前端 Vite 代理与 CORS 直连均指向它
   port: 18080
+  shutdown: graceful
 
 spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:bbb_agent_demo}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  sql:
+    init:
+      # schema.sql 由本地初始化脚本显式执行，避免应用启动时因数据库权限导致不可控建表。
+      mode: never
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
   ai:
     openai:
-      # 阿里百炼 DashScope（OpenAI 兼容模式）
-      # 密钥通过环境变量注入，勿明文入库：
-      #   本地演示可先 export QWEN_API_KEY=sk-xxx 再启动
-      api-key: sk-ws-H.PMPYEDX.4o9E.MEUCIQCqGrgObbDV9cYzU3RNcKtocWO6dQMv6qnwUVzLtRc4ewIgE-FoZnAKHS75jSrvdVCUYCSTAMBpQvPaH7XfAnMVwZU
+      api-key: ${QWEN_API_KEY:}
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      timeout: 60s
+      max-retries: 2
       chat:
-        options:
-          # chat.options.* 由 config/OpenAiProperties(@ConfigurationProperties prefix=spring.ai.openai)
-          # 绑定，并被 config/AiConfiguration 显式装配为 OpenAiChatModel 的 defaultOptions。
-          # 本项目手动构建模型（指向兼容端点），绕过了官方自动装配，因此不设置就不会生效；
-          # 要固定采样温度可放开下行（null = 服务端默认）：
-          # temperature: 0.7
-          model: qwen-turbo   # 或 qwen-plus / qwen-max
+        model: qwen-turbo   # 或 qwen-plus / qwen-max
+    chat:
+      memory:
+        repository:
+          redis:
+            host: ${REDIS_HOST:localhost}
+            port: ${REDIS_PORT:6379}
+            password: ${REDIS_PASSWORD:}
+            key-prefix: "chat:memory:"
+            # 会话记忆在 Redis 中的存活时间：只保存对话，到期自动清理
+            time-to-live: 7d
+            # 启动时自动建立记忆 JSON 索引
+            initialize-schema: true
 
-  # Redis：会话记忆二级存储。本地默认端口、无密码。
-  # 生产请用环境变量注入密码：password: ${REDIS_PASSWORD:}
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      password: 123456
-      lettuce:
-        pool:
-          enabled: true
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
+    mcp:
+      client:
+        enabled: true
+        name: bbb-mcp-client
+        version: 1.0.0
+        type: async
+        request-timeout: 60s
+        toolcallback:
+          enabled: false
+      server:
+        enabled: true
+        name: bbb-mcp-server
+        version: 1.0.0
+        protocol: STREAMABLE
+        type: sync
+        # 工具集说明，宿主会作为背景提示交给模型
+        instructions: >-
+          出行助手工具集。getWeather 查询指定城市的实时天气（温度/天气/湿度/风速）；
+          getAttraction 根据城市与当前天气联网检索值得去的景点及理由。
+          推荐先调用 getWeather 拿到天气，再把天气描述传给 getAttraction。
+        annotation-scanner:
+          enabled: false
+        capabilities:
+          tool: true
+          prompt: false
+          resource: false
+          completion: false
+        request-timeout: 60s
+        streamable-http:
+          mcp-endpoint: /mcp
 
-
-# Tavily 搜索（getAttraction 的数据源；getWeather 的兜底数据源，首选为 Open-Meteo）
 tavily:
-  api-key: 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
+  api-key: ${TAVILY_API_KEY:}
   base-url: https://api.tavily.com
   search-depth: advanced
   max-results: 5
   include-answer: true
-
-# 会话记忆（二级记忆方案 + Redis 8 改造）
-chat:
-  memory:
-    # 一级（短时）：LRU 内存窗口，供 LLM 实时上下文，进程内、低延迟
-    window-size: 50
-    # 内存中最大驻留会话数（超出按 LRU 淘汰，0 表示不限制）
-    max-conversations: 1000
-    # 二级（长时）：RedisJSON 文档 + RediSearch 内置索引
-    redis:
-      key-prefix: "chat:memory:"
-      time-to-live: 7d
-      max-messages-per-conversation: 1000
-      # === Redis 8 改造新增 ===
-      index-name: "chat-memory-idx"
-      initialize-schema: true
-      # 启动期自动清理旧 Sorted Set 结构（改造前演示残留）。关闭后保留旧 key，新写入走新结构
-      cleanup-legacy-on-startup: true
-      # 压缩任务改用 Redis Streams 持久化（重启不丢任务）
-      streams:
-        enabled: true
-        key: "chat:memory:compress-tasks"
-        consumer-group: "memory-compressors"
-        # 单实例消费者名（多实例部署时建议用 ${HOSTNAME} 等环境变量区分）
-        consumer-name: "consumer-1"
-        poll-interval-ms: 30000
-        batch-size: 20
-    # 压缩概括：空闲后对旧历史生成摘要，减少引用时 token 用量
-    summary:
-      keep-recent: 10
-      idle-minutes: 10
-      max-length: 200
-      # streams.enabled=true 时本字段不再生效（轮询交给 Streams）
-      scan-interval-seconds: 60
-      enabled: true
 
 logging:
   charset:
@@ -83,6 +81,31 @@ logging:
     file: UTF-8
   level:
     root: INFO
-    org.springframework.ai: DEBUG   # 观察多轮工具调用（契约 §3）
-    org.springframework.ai.chat.client: DEBUG
-    com.bbb.exercise.agentdemo1_0.memory: DEBUG   # 会话记忆二级存储调试
+    org.springframework.ai: INFO
+    org.springframework.ai.chat.client: INFO
+
+app:
+  security:
+    # 未接入登录系统时，使用 HttpOnly 匿名 Cookie 维持本地实验用户边界。
+    anonymous-cookie-name: bbb_agent_anonymous_id
+    default-tenant-id: local
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: github
+  ai:
+    mcp:
+      client:
+        toolcallback:
+          enabled: true
+        stdio:
+          connections:
+            github:
+              command: cmd.exe
+              args: ["/c", "npx", "-y", "@modelcontextprotocol/server-github"]
+              env:
+                # 取自 Windows 用户级环境变量，配置文件里不再出现明文
+                GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:}

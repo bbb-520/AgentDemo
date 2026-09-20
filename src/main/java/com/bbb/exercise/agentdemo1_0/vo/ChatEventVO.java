@@ -6,11 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+
 /**
- * 聊天回答内容（SSE 单行事件）：序列化为 JSON 后作为一行 {@code data:} 发送给前端。
- *
- * <p>事件类型与 eventData 的组合见 {@link ChatEventTypeEnum}：
- * DATA 事件 eventData 为文本增量；STOP 事件 eventData 为 null；ERROR 事件 eventData 为错误描述。
+ * 对外 SSE 事件载体：流式对话中每推送一条事件，就是本对象被序列化后的结果。
+ * 前端按 {@code eventType} 分派处理（正文 / 工具直播 / 用量 / 结束 等）。
  */
 @Data
 @Builder

@@ -1,32 +1,24 @@
 package com.bbb.exercise.agentdemo1_0.tools.weather;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.bbb.exercise.agentdemo1_0.utils.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
 
+
 /**
- * Open-Meteo 天气数据源（首选渠道）。
+ * 首选天气数据源：Open-Meteo（免密钥）。
  *
- * <p>选择理由（对比原 Tavily 搜索方案）：
- * <ul>
- *     <li><b>免费且无需 API Key</b>：非商业用途不限量，少一份密钥运维；</li>
- *     <li><b>结构化数据</b>：直接返回温度/湿度/风速/天气码等字段，不依赖搜索引擎
- *         摘要的稳定性，也不会把无关网页正文塞进模型上下文；</li>
- *     <li><b>性能</b>：两次轻量 GET（地理编码 + 实况），端到端通常 300ms 内，
- *         比 Tavily advanced 搜索（2~5s）快一个数量级。</li>
- * </ul>
- *
- * <p>调用链：城市名 → geocoding-api 解析经纬度 → forecast API 取 current 实况
- * → WMO 天气码映射为中文描述。任何一步失败都抛异常，由 {@link WeatherService}
- * 自动降级到下一个渠道。
+ * <p>两步调用：城市名 →（geocoding）经纬度 →（forecast）当前实况，
+ * 再把 WMO 天气码与风向角度转成中文描述返回。
  */
 @Slf4j
 @Component
@@ -71,13 +63,21 @@ public class OpenMeteoWeatherProvider implements WeatherProvider {
     private static final String[] WIND_DIRECTIONS =
             {"北", "东北", "东", "东南", "南", "西南", "西", "西北"};
 
-    private final WebClient webClient = WebClient.builder().build();
+    private final WebClient webClient;
+
+    public OpenMeteoWeatherProvider(@Qualifier("openMeteoWebClient") WebClient webClient) {
+        this.webClient = webClient;
+    }
 
     @Override
     public String name() {
         return "Open-Meteo";
     }
 
+    /**
+     * 查询流程：地理编码拿坐标 → 请求实况 → 格式化中文描述。
+     * 任一步数据缺失都抛异常，由 {@link WeatherService} 降级到下一个数据源。
+     */
     @Override
     public String fetchWeather(String city) {
         JsonNode location = geocode(city);

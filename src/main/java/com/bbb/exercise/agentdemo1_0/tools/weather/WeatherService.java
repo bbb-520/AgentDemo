@@ -6,12 +6,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+
 /**
- * 天气查询门面：按 {@code @Order} 顺序遍历所有 {@link WeatherProvider}，
- * 首个成功者胜出，全部失败才抛出异常。
+ * 天气查询服务：多数据源 + 自动降级。
  *
- * <p>调用方（如 weatherTool）只依赖本类，不关心具体有几个数据源、
- * 优先级如何 —— 新增/下线数据源对调用方完全透明。
+ * <p>按注入顺序（{@code @Order} 升序）依次尝试各 {@link WeatherProvider}（当前为
+ * Open-Meteo → Tavily），任一成功即返回；全部失败才抛异常。
+ * 新增渠道只需实现 {@link WeatherProvider} 并标 {@code @Order}，无需改动本类。
  */
 @Slf4j
 @Service

@@ -1,6 +1,5 @@
 package com.bbb.exercise.agentdemo1_0.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -8,22 +7,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 public class TavilyConfig {
 
-    @Value("${tavily.api-key}")
-    private String apiKey;
-
-    @Value("${tavily.base-url}")
-    private String baseUrl;
-
-    /**
-     * 注册Tavily的响应式HTTP客户端接口
-     *
-     * @return
-     */
     @Bean
-    public WebClient tavilyWebClient(){
-        return WebClient.builder()
-                .baseUrl(baseUrl)
-                .defaultHeader("Authorization", "Bearer " + apiKey)
+    public WebClient tavilyWebClient(WebClient.Builder builder, TavilyProperties properties){
+        return builder
+                .baseUrl(properties.getBaseUrl())
+                .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
                 .defaultHeader("Content-Type", "application/json")
                 .build();
     }
