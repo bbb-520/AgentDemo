@@ -40,5 +40,12 @@ public class UserApiKeyController {
                 .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 
+    @DeleteMapping("/{provider}")
+    public Mono<Void> clearProvider(@PathVariable String provider, ServerWebExchange exchange) {
+        return identities.resolveRequired(exchange)
+                .doOnNext(identity -> keys.clearProvider(identity, provider)).then()
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
+    }
+
     public record ApiKeys(String qwenApiKey, String tavilyApiKey) {}
 }

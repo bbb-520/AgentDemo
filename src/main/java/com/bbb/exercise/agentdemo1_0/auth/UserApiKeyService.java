@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
-/** Encrypted per-user provider keys. Plaintext is returned only inside the backend. */
+/** Per-user provider keys stored in the database for the current local-development setup. */
 @Service
 public class UserApiKeyService {
     private final JdbcTemplate jdbc;
@@ -38,8 +38,9 @@ public class UserApiKeyService {
         long userId = auth.requireUserId(identity);
         var rows = jdbc.query("SELECT qwen_api_key_ciphertext,tavily_api_key_ciphertext FROM user_api_key WHERE user_id=?",
                 (rs, n) -> new String[]{rs.getString(1), rs.getString(2)}, userId);
-        if (rows.isEmpty()) return new KeyStatus(false, false);
-        return new KeyStatus(!blank(rows.get(0)[0]), !blank(rows.get(0)[1]));
+        if (rows.isEmpty()) return new KeyStatus(false, false, null, null);
+        return new KeyStatus(!blank(rows.get(0)[0]), !blank(rows.get(0)[1]),
+                mask(rows.get(0)[0]), mask(rows.get(0)[1]));
     }
 
     public UserApiKeys get(ChatIdentity identity) {
@@ -54,8 +55,26 @@ public class UserApiKeyService {
         jdbc.update("DELETE FROM user_api_key WHERE user_id=?", auth.requireUserId(identity));
     }
 
+    public void clearProvider(ChatIdentity identity, String provider) {
+        long userId = auth.requireUserId(identity);
+        if ("qwen".equalsIgnoreCase(provider)) {
+            jdbc.update("UPDATE user_api_key SET qwen_api_key_ciphertext=NULL,updated_at=? WHERE user_id=?", LocalDateTime.now(), userId);
+        } else if ("tavily".equalsIgnoreCase(provider)) {
+            jdbc.update("UPDATE user_api_key SET tavily_api_key_ciphertext=NULL,updated_at=? WHERE user_id=?", LocalDateTime.now(), userId);
+        } else {
+            throw new IllegalArgumentException("不支持的 API Key 类型");
+        }
+    }
+
     private static boolean blank(String s) { return s == null || s.isBlank(); }
-    public record KeyStatus(boolean qwenConfigured, boolean tavilyConfigured) {}
+    private static String mask(String value) {
+        if (blank(value)) return null;
+        String v = value.trim();
+        if (v.length() <= 8) return "••••••••";
+        return v.substring(0, Math.min(4, v.length())) + "••••••••" + v.substring(v.length() - 4);
+    }
+    public record KeyStatus(boolean qwenConfigured, boolean tavilyConfigured,
+                            String qwenApiKey, String tavilyApiKey) {}
     public record UserApiKeys(String qwenApiKey, String tavilyApiKey) {
         public boolean hasQwen() { return qwenApiKey != null && !qwenApiKey.isBlank(); }
         public boolean hasTavily() { return tavilyApiKey != null && !tavilyApiKey.isBlank(); }
