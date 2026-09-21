@@ -1,3 +1,9 @@
+CREATE DATABASE IF NOT EXISTS bbb_agent_demo
+    DEFAULT CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+USE bbb_agent_demo;
+
 CREATE TABLE IF NOT EXISTS chat_conversation (
     id BIGINT NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(128) NOT NULL,

@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:bbb_agent_demo}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:}
+    password: ${MYSQL_PASSWORD:123456}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -90,7 +90,6 @@ app:
     anonymous-cookie-name: bbb_agent_anonymous_id
     session-cookie-name: bbb_agent_session
     default-tenant-id: local
-    api-keys-encryption-key: ${API_KEYS_ENCRYPTION_KEY:}
 
 ---
 
