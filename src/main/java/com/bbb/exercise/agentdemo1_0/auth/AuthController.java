@@ -51,12 +51,17 @@ public class AuthController {
     }
 
     private ResponseCookie cookie(ServerWebExchange exchange, String token, Duration ttl) {
-        boolean secure = "https".equalsIgnoreCase(exchange.getRequest().getHeaders().getFirst("X-Forwarded-Proto"))
-                || "https".equalsIgnoreCase(exchange.getRequest().getURI().getScheme())
-                || Boolean.parseBoolean(System.getenv().getOrDefault("FORCE_COOKIE_SECURE", "false"));
+        boolean secure = isSecureRequest(exchange);
         return ResponseCookie.from(auth.sessionCookieName(), token)
                 .httpOnly(true).secure(secure).sameSite(secure ? "None" : "Lax")
                 .path("/").maxAge(ttl).build();
+    }
+
+    private static boolean isSecureRequest(ServerWebExchange exchange) {
+        String forwardedProto = exchange.getRequest().getHeaders().getFirst("X-Forwarded-Proto");
+        return "https".equalsIgnoreCase(forwardedProto)
+                || "https".equalsIgnoreCase(exchange.getRequest().getURI().getScheme())
+                || Boolean.parseBoolean(System.getenv().getOrDefault("FORCE_COOKIE_SECURE", "false"));
     }
 
     public record Credentials(String username, String password) {}

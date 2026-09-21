@@ -29,4 +29,10 @@ public class ChatExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(Map.of("code", 400, "message", exception.getMessage() == null ? "请求参数错误" : exception.getMessage()));
     }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleConfigurationError(IllegalStateException exception) {
+        return ResponseEntity.status(503)
+                .body(Map.of("code", 503, "message", exception.getMessage() == null ? "服务配置错误" : exception.getMessage()));
+    }
 }

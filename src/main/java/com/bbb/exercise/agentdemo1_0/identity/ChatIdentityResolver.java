@@ -14,8 +14,8 @@ import java.util.UUID;
 /**
  * 从认证主体或服务端签发的匿名 Cookie 解析身份。
  *
- * <p>当前工程未接入 Spring Security，因此本地实验使用 HttpOnly Cookie；生产环境接入
- * Security 后，WebFlux Principal 会优先于匿名 Cookie，客户端不能通过请求体伪造归属。</p>
+ * <p>当前工程未接入 Spring Security，因此本地实验使用 HttpOnly Cookie；
+ * WebFlux Principal 会优先于匿名 Cookie，客户端不能通过请求体伪造归属。</p>
  */
 @Component
 public class ChatIdentityResolver {
@@ -53,8 +53,6 @@ public class ChatIdentityResolver {
             userId = UUID.randomUUID().toString();
             exchange.getResponse().addCookie(ResponseCookie.from(anonymousCookieName, userId)
                     .httpOnly(true)
-                    // Netlify 与 API 使用不同站点时，跨源 fetch + credentials 需要 None/Secure。
-                    // 本地 HTTP 仍使用 Lax，避免开发环境被浏览器拒绝。
                     .sameSite(isSecureRequest(exchange) ? "None" : "Lax")
                     .secure(isSecureRequest(exchange))
                     .path("/")
