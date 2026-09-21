@@ -18,7 +18,14 @@ MYSQL_PASSWORD=...
 REDIS_HOST=...
 REDIS_PORT=6379
 REDIS_PASSWORD=...
+API_KEYS_ENCRYPTION_KEY=生成一个至少 32 位的随机字符串
 ```
+
+数据库 / Redis 请使用你自己的公网实例；主机、端口、用户名与密码统一在 Render 环境变量中填写，不要提交到 Git。应用侧默认值见 `src/main/resources/application.yml`。
+
+如果免费方案是用 TCP 隧道把本机 MySQL/Redis 映射到公网，主机与端口由隧道客户端动态分配，请以客户端显示的实际值为准，只填在 Render 后台。
+
+用户登录后可在网页中保存自己的 Qwen/Tavily 密钥。密钥使用 `API_KEYS_ENCRYPTION_KEY` 加密后写入 MySQL，Render 重建时必须保留同一个加密密钥，否则历史密钥无法解密。
 
 Render 会把公网端口放到 `PORT` 环境变量，Dockerfile 已经自动读取它；健康检查地址是 `/health`。
 

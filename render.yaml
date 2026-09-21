@@ -8,6 +8,10 @@ services:
     envVars:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      - key: FORCE_COOKIE_SECURE
+        value: "true"
+      - key: API_KEYS_ENCRYPTION_KEY
+        sync: false
       - key: QWEN_API_KEY
         sync: false
       - key: TAVILY_API_KEY
@@ -15,7 +19,7 @@ services:
       - key: MYSQL_HOST
         sync: false
       - key: MYSQL_PORT
-        value: "3306"
+        sync: false
       - key: MYSQL_DATABASE
         sync: false
       - key: MYSQL_USERNAME
@@ -25,6 +29,6 @@ services:
       - key: REDIS_HOST
         sync: false
       - key: REDIS_PORT
-        value: "6379"
+        sync: false
       - key: REDIS_PASSWORD
         sync: false
