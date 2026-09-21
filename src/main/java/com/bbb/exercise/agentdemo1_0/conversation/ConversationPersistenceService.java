@@ -29,16 +29,7 @@ public class ConversationPersistenceService {
             throw new ConversationRequestException(400, e.getMessage());
         }
         if (conversationId == null) {
-            ConversationEntity entity = new ConversationEntity();
-            entity.setTenantId(identity.tenantId());
-            entity.setUserId(identity.userId());
-            entity.setConversationId(ConversationKeys.newConversationId());
-            entity.setTitle("新会话");
-            entity.setStatus(1);
-            entity.setCreatedAt(LocalDateTime.now());
-            entity.setUpdatedAt(entity.getCreatedAt());
-            conversationMapper.insert(entity);
-            return new ConversationSession(entity.getId(), entity.getConversationId(), identity, true);
+            return createConversation(ConversationKeys.newConversationId(), identity);
         }
         ConversationEntity entity = conversationMapper.selectOne(Wrappers.<ConversationEntity>lambdaQuery()
                 .eq(ConversationEntity::getTenantId, identity.tenantId())
@@ -46,9 +37,29 @@ public class ConversationPersistenceService {
                 .eq(ConversationEntity::getConversationId, conversationId)
                 .eq(ConversationEntity::getStatus, 1));
         if (entity == null) {
-            throw new ConversationRequestException(404, "会话不存在或不属于当前用户");
+            // 前端会在 localStorage 中先生成 UUID，再把它作为首次请求的 sessionId。
+            // 只有当该 UUID 已被其它用户占用时才拒绝，新的合法 UUID 直接建立归属记录。
+            ConversationEntity occupied = conversationMapper.selectOne(Wrappers.<ConversationEntity>lambdaQuery()
+                    .eq(ConversationEntity::getConversationId, conversationId));
+            if (occupied != null) {
+                throw new ConversationRequestException(404, "会话不存在或不属于当前用户");
+            }
+            return createConversation(conversationId, identity);
         }
         return new ConversationSession(entity.getId(), entity.getConversationId(), identity, false);
+    }
+
+    private ConversationSession createConversation(String conversationId, ChatIdentity identity) {
+        ConversationEntity entity = new ConversationEntity();
+        entity.setTenantId(identity.tenantId());
+        entity.setUserId(identity.userId());
+        entity.setConversationId(conversationId);
+        entity.setTitle("新会话");
+        entity.setStatus(1);
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(entity.getCreatedAt());
+        conversationMapper.insert(entity);
+        return new ConversationSession(entity.getId(), entity.getConversationId(), identity, true);
     }
 
     @Transactional
