@@ -33,4 +33,8 @@ public class TavilyWeatherProvider implements WeatherProvider {
     public String fetchWeather(String city) {
         return tavilySearcher.search("weather:" + city, String.format(QUERY_TEMPLATE, city));
     }
+
+    public String fetchWeather(String city, String apiKey) {
+        return tavilySearcher.search(apiKey, "weather:" + city, String.format(QUERY_TEMPLATE, city));
+    }
 }

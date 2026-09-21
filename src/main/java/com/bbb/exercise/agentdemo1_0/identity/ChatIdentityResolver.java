@@ -1,6 +1,7 @@
 package com.bbb.exercise.agentdemo1_0.identity;
 
 import com.bbb.exercise.agentdemo1_0.config.AppProperties;
+import com.bbb.exercise.agentdemo1_0.auth.AuthService;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -20,17 +21,28 @@ import java.util.UUID;
 public class ChatIdentityResolver {
 
     private final AppProperties properties;
+    private final AuthService authService;
 
-    public ChatIdentityResolver(AppProperties properties) {
+    public ChatIdentityResolver(AppProperties properties, AuthService authService) {
         this.properties = properties;
+        this.authService = authService;
     }
 
     public Mono<ChatIdentity> resolve(ServerWebExchange exchange) {
-        return exchange.getPrincipal()
+        return Mono.fromCallable(() -> authService.resolve(exchange))
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                .filter(java.util.Objects::nonNull)
+                .switchIfEmpty(exchange.getPrincipal()
                 .map(Principal::getName)
                 .filter(name -> name != null && !name.isBlank())
                 .map(name -> new ChatIdentity(properties.getSecurity().getDefaultTenantId(), name, true))
-                .switchIfEmpty(Mono.fromSupplier(() -> resolveAnonymous(exchange)));
+                .switchIfEmpty(Mono.fromSupplier(() -> resolveAnonymous(exchange))));
+    }
+
+    public Mono<ChatIdentity> resolveRequired(ServerWebExchange exchange) {
+        return resolve(exchange).flatMap(identity -> identity.authenticated()
+                ? Mono.just(identity)
+                : Mono.error(new AuthService.AuthException(401, "请先登录")));
     }
 
     private ChatIdentity resolveAnonymous(ServerWebExchange exchange) {

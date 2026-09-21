@@ -14,7 +14,9 @@ public class AppProperties {
 
     public static class Security {
         private String anonymousCookieName = "bbb_agent_anonymous_id";
+        private String sessionCookieName = "bbb_agent_session";
         private String defaultTenantId = "local";
+        private String apiKeysEncryptionKey;
 
         public String getAnonymousCookieName() {
             return anonymousCookieName;
@@ -24,6 +26,9 @@ public class AppProperties {
             this.anonymousCookieName = anonymousCookieName;
         }
 
+        public String getSessionCookieName() { return sessionCookieName; }
+        public void setSessionCookieName(String sessionCookieName) { this.sessionCookieName = sessionCookieName; }
+
         public String getDefaultTenantId() {
             return defaultTenantId;
         }
@@ -31,5 +36,8 @@ public class AppProperties {
         public void setDefaultTenantId(String defaultTenantId) {
             this.defaultTenantId = defaultTenantId;
         }
+
+        public String getApiKeysEncryptionKey() { return apiKeysEncryptionKey; }
+        public void setApiKeysEncryptionKey(String apiKeysEncryptionKey) { this.apiKeysEncryptionKey = apiKeysEncryptionKey; }
     }
 }

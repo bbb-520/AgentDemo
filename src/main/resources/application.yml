@@ -88,7 +88,9 @@ app:
   security:
     # 未接入登录系统时，使用 HttpOnly 匿名 Cookie 维持本地实验用户边界。
     anonymous-cookie-name: bbb_agent_anonymous_id
+    session-cookie-name: bbb_agent_session
     default-tenant-id: local
+    api-keys-encryption-key: ${API_KEYS_ENCRYPTION_KEY:}
 
 ---
 

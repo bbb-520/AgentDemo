@@ -53,4 +53,21 @@ public class WeatherService {
         throw new IllegalStateException("所有天气数据源均不可用: " + city,
                 lastError == null ? new IllegalStateException("无可用 WeatherProvider") : lastError);
     }
+
+    /** Same fallback chain with a caller-owned Tavily credential. */
+    public String getWeather(String city, String tavilyApiKey) {
+        RuntimeException lastError = null;
+        for (WeatherProvider provider : providers) {
+            try {
+                String result = provider instanceof TavilyWeatherProvider tavily
+                        ? tavily.fetchWeather(city, tavilyApiKey)
+                        : provider.fetchWeather(city);
+                if (!StringUtils.isBlank(result)) return StringUtils.trim(result);
+            } catch (RuntimeException e) {
+                lastError = e;
+            }
+        }
+        throw new IllegalStateException("所有天气数据源均不可用: " + city,
+                lastError == null ? new IllegalStateException("无可用 WeatherProvider") : lastError);
+    }
 }

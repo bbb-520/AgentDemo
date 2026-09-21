@@ -1,6 +1,7 @@
 package com.bbb.exercise.agentdemo1_0.chat;
 
 import com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum;
+import com.bbb.exercise.agentdemo1_0.auth.UserApiKeyService;
 import com.bbb.exercise.agentdemo1_0.conversation.ConversationPersistenceService;
 import com.bbb.exercise.agentdemo1_0.conversation.ConversationSession;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
@@ -41,7 +42,8 @@ public class ChatService {
     /** 单次提问的最大字符数（防御性上限：避免超长输入直接进模型带来的成本与滥用风险） */
     private static final int MAX_QUESTION_LENGTH = 4000;
 
-    private final ChatClient chatClient;
+    private final UserChatClientFactory chatClientFactory;
+    private final UserApiKeyService userApiKeys;
     private final ConversationPersistenceService conversationPersistenceService;
 
 
@@ -69,7 +71,15 @@ public class ChatService {
         if (invalid != null) {
             return Flux.just(errorEvent(invalid), stopEvent());
         }
+        return Mono.fromCallable(() -> userApiKeys.get(session.identity()))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMapMany(keys -> chatWithKeys(question, session, keys));
+    }
+
+    private Flux<ChatEventVO> chatWithKeys(String question, ConversationSession session,
+                                           UserApiKeyService.UserApiKeys keys) {
         String conversationId = session.conversationId();
+        ChatClient chatClient = chatClientFactory.create(keys);
         String memoryKey = ConversationKeys.memoryKey(session.identity(), conversationId);
         StringBuilder assistantText = new StringBuilder();
 

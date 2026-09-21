@@ -1,6 +1,7 @@
 package com.bbb.exercise.agentdemo1_0.chat;
 
 import com.bbb.exercise.agentdemo1_0.conversation.ConversationPersistenceService.ConversationRequestException;
+import com.bbb.exercise.agentdemo1_0.auth.AuthService.AuthException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -15,5 +16,17 @@ public class ChatExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleConversationRequest(ConversationRequestException exception) {
         return ResponseEntity.status(exception.status())
                 .body(Map.of("code", exception.status(), "message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<Map<String, Object>> handleAuth(AuthException exception) {
+        return ResponseEntity.status(exception.status())
+                .body(Map.of("code", exception.status(), "message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException exception) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("code", 400, "message", exception.getMessage() == null ? "请求参数错误" : exception.getMessage()));
     }
 }

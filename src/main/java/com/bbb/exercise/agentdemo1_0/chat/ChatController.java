@@ -54,7 +54,7 @@ public class ChatController {
         log.info("[chat] 流式请求 sessionIdPresent={} questionLength={}",
                 safe.getSessionId() != null && !safe.getSessionId().isBlank(),
                 safe.getQuestion() == null ? 0 : safe.getQuestion().length());
-        return identityResolver.resolve(exchange)
+        return identityResolver.resolveRequired(exchange)
                 .flatMap(identity -> chatService.openConversation(safe.getSessionId(), identity)
                         .map(session -> ResponseEntity.ok()
                                 .contentType(MediaType.TEXT_EVENT_STREAM)

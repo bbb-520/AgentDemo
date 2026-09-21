@@ -44,6 +44,12 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- BCrypt password hashing for the application login flow. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <!-- MySQL + MyBatis-Plus：会话元数据和消息长期存储 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

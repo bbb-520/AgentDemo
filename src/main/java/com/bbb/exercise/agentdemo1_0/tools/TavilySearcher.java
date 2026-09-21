@@ -30,12 +30,15 @@ public class TavilySearcher {
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     private final WebClient tavilyWebClient;
+    private final WebClient.Builder webClientBuilder;
 
     private final TavilyProperties properties;
 
     public TavilySearcher(@Qualifier("tavilyWebClient") WebClient tavilyWebClient,
+                          WebClient.Builder webClientBuilder,
                           TavilyProperties properties) {
         this.tavilyWebClient = tavilyWebClient;
+        this.webClientBuilder = webClientBuilder;
         this.properties = properties;
     }
 
@@ -49,6 +52,21 @@ public class TavilySearcher {
      * @throws RuntimeException 请求失败或返回内容为空
      */
     public String search(String context, String query) {
+        return searchWithClient(tavilyWebClient, context, query);
+    }
+
+    /** Per-user search. The key stays inside the backend. */
+    public String search(String apiKey, String context, String query) {
+        if (StringUtils.isBlank(apiKey)) throw new IllegalStateException("未配置 Tavily API 密钥");
+        WebClient client = webClientBuilder.clone()
+                .baseUrl(properties.getBaseUrl())
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .defaultHeader("Content-Type", "application/json")
+                .build();
+        return searchWithClient(client, context, query);
+    }
+
+    private String searchWithClient(WebClient client, String context, String query) {
         // Map.of 不允许 null 值：先显式校验，避免以 NPE 的形式暴露给上层工具
         if (StringUtils.isBlank(query)) {
             throw new IllegalArgumentException("Tavily 搜索内容不能为空, ctx=" + context);
@@ -61,7 +79,7 @@ public class TavilySearcher {
         log.debug("Tavily 调用, ctx={}, query={}", context, query);
 
         try {
-            JsonNode response = tavilyWebClient.post()
+            JsonNode response = client.post()
                     .uri(SEARCH_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body)
