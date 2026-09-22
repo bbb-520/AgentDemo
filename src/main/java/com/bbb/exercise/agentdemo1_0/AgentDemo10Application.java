@@ -3,6 +3,7 @@ package com.bbb.exercise.agentdemo1_0;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 应用启动类。
@@ -18,6 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@EnableScheduling
 public class AgentDemo10Application {
 
     public static void main(String[] args) {

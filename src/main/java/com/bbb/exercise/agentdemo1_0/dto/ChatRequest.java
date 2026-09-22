@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 对话请求参数。
  */
@@ -12,7 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ChatRequest {
 
-    /** 用户的问题（必填） */
+    /** 用户的问题；仅上传图片并等待下一轮指令时可以为空。 */
     private String question;
 
     /**
@@ -21,4 +23,7 @@ public class ChatRequest {
      * 非服务端生成的值会被拒绝，不会被清洗或静默改写。
      */
     private String sessionId;
+
+    /** 已经直传到 OSS 的图片资产，不在聊天请求中携带二进制。 */
+    private List<ChatAttachmentRequest> attachments;
 }

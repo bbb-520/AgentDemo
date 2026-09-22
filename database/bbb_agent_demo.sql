@@ -28,3 +28,46 @@ CREATE TABLE IF NOT EXISTS chat_message (
     CONSTRAINT fk_chat_message_conversation
         FOREIGN KEY (conversation_db_id) REFERENCES chat_conversation (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS image_asset (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    tenant_id VARCHAR(128) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    object_key VARCHAR(512) NOT NULL,
+    original_name VARCHAR(255) NULL,
+    mime_type VARCHAR(128) NOT NULL,
+    file_size BIGINT NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    expires_at DATETIME(3) NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    UNIQUE KEY uk_image_asset_object_key (object_key),
+    KEY idx_image_asset_owner (tenant_id, user_id, created_at),
+    KEY idx_image_asset_expiry (status, expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS image_job (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    tenant_id VARCHAR(128) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    conversation_id CHAR(36) NOT NULL,
+    source_asset_id CHAR(36) NOT NULL,
+    source_object_key VARCHAR(512) NOT NULL,
+    output_object_key VARCHAR(512) NULL,
+    mode VARCHAR(32) NOT NULL DEFAULT 'gathered',
+    language VARCHAR(32) NOT NULL DEFAULT 'chinese',
+    prompt TEXT NOT NULL,
+    rationale TEXT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'QUEUED',
+    provider_request_id VARCHAR(255) NULL,
+    error_message TEXT NULL,
+    attempt_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME(3) NOT NULL,
+    started_at DATETIME(3) NULL,
+    completed_at DATETIME(3) NULL,
+    expires_at DATETIME(3) NOT NULL,
+    KEY idx_image_job_owner (tenant_id, user_id, created_at),
+    KEY idx_image_job_conversation (tenant_id, user_id, conversation_id, created_at),
+    KEY idx_image_job_queue (status, created_at),
+    CONSTRAINT fk_image_job_asset FOREIGN KEY (source_asset_id) REFERENCES image_asset (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

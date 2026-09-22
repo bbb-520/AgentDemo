@@ -12,6 +12,7 @@ build/
 *.class
 *.jar
 *.war
+.m2repo/
 
 # Agent 私有工作日志（不入仓）
 .workbuddy/memory/*.md

@@ -67,7 +67,6 @@ public class AiConfig {
         return chatClientBuilder
                 .defaultSystem(systemPrompt)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .defaultTools(agentToolCallbackProvider)
                 .build();
     }
 }

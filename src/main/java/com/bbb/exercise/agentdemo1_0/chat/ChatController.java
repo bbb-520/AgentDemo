@@ -42,7 +42,8 @@ public class ChatController {
                                                         ServerWebExchange exchange) {
         // 允许空 body：request 为 null 时用空对象兜底，交给 ChatService 做参数校验
         ChatRequest safe = request == null ? new ChatRequest() : request;
-        String invalid = ChatService.validateQuestion(safe.getQuestion());
+        String invalid = ChatService.validateQuestion(safe.getQuestion(),
+                safe.getAttachments() != null && !safe.getAttachments().isEmpty());
         if (invalid != null) {
             return Mono.just(ResponseEntity.ok()
                     .contentType(MediaType.TEXT_EVENT_STREAM)
@@ -58,6 +59,6 @@ public class ChatController {
                 .flatMap(identity -> chatService.openConversation(safe.getSessionId(), identity)
                         .map(session -> ResponseEntity.ok()
                                 .contentType(MediaType.TEXT_EVENT_STREAM)
-                                .body(chatService.chat(safe.getQuestion(), session))));
+                                .body(chatService.chat(safe.getQuestion(), session, safe.getAttachments()))));
     }
 }

@@ -3,6 +3,9 @@ server:
   shutdown: graceful
 
 spring:
+  codec:
+    # 图片编辑接口默认允许 10 MB 源图，并留出 multipart / JSON 包装余量。
+    max-in-memory-size: 12MB
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:bbb_agent_demo}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:root}
@@ -24,6 +27,8 @@ spring:
       max-retries: 2
       chat:
         model: qwen-turbo   # 或 qwen-plus / qwen-max
+        # 图片消息使用兼容 OpenAI multimodal content 的视觉模型。
+        vision-model: ${QWEN_VISION_MODEL:qwen-vl-plus}
     chat:
       memory:
         repository:
@@ -85,6 +90,35 @@ logging:
     org.springframework.ai.chat.client: INFO
 
 app:
+  oss:
+    enabled: ${OSS_ENABLED:true}
+    region: ${ALIYUN_OSS_REGION:cn-beijing}
+    bucket: ${ALIYUN_OSS_BUCKET:bbb-image-prod}
+    endpoint: ${ALIYUN_OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:}
+    source-prefix: ${OSS_SOURCE_PREFIX:source}
+    output-prefix: ${OSS_OUTPUT_PREFIX:output}
+    thumbnail-prefix: ${OSS_THUMBNAIL_PREFIX:thumbnail}
+    upload-policy-ttl: ${OSS_UPLOAD_POLICY_TTL:600s}
+    signed-url-ttl: ${OSS_SIGNED_URL_TTL:600s}
+    max-object-bytes: ${OSS_MAX_OBJECT_BYTES:20971520}
+  zine:
+    enabled: ${ZINE_ENABLED:true}
+    # 优先使用 DASHSCOPE_API_KEY；兼容现有项目的 QWEN_API_KEY 命名。
+    api-key: ${DASHSCOPE_API_KEY:${QWEN_API_KEY:}}
+    base-url: ${ZINE_IMAGE_BASE_URL:https://dashscope.aliyuncs.com/api/v1}
+    endpoint: ${ZINE_IMAGE_ENDPOINT:/services/aigc/multimodal-generation/generation}
+    model: ${ZINE_IMAGE_MODEL:qwen-image-3.0-pro}
+    size: ${ZINE_IMAGE_SIZE:1024*1707}
+    prompt-extend: ${ZINE_PROMPT_EXTEND:true}
+    watermark: ${ZINE_WATERMARK:false}
+    timeout: ${ZINE_IMAGE_TIMEOUT:180s}
+    max-upload-bytes: ${ZINE_MAX_UPLOAD_BYTES:20971520}
+  image-jobs:
+    enabled: ${IMAGE_JOBS_ENABLED:true}
+    poll-interval: ${IMAGE_JOBS_POLL_INTERVAL:3000ms}
+    max-attempts: ${IMAGE_JOBS_MAX_ATTEMPTS:2}
   security:
     # 未接入登录系统时，使用 HttpOnly 匿名 Cookie 维持本地实验用户边界。
     anonymous-cookie-name: bbb_agent_anonymous_id

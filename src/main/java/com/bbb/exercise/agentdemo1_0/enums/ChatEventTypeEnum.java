@@ -12,7 +12,8 @@ public enum ChatEventTypeEnum {
     DATA(1001),                 //数据事件，eventData 为模型输出的文本增量
     STOP(1002),                 //停止事件，流末尾必定发送，eventData 为 null
     ERROR(1004),                //错误事件，eventData 为错误描述
-    SESSION_INFO(1010);         //会话信息，流开始时发送一次，eventData 为 JSON 对象
+    SESSION_INFO(1010),         //会话信息，流开始时发送一次，eventData 为 JSON 对象
+    IMAGE_JOB(1011);            //图片后台任务，eventData 为 ImageJobEventData
 
     private final int value;
 

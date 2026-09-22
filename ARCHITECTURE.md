@@ -6,9 +6,12 @@
 
 ```text
 chat              HTTP/SSE 入口与对话编排
-conversation      会话领域模型、归属校验、MySQL 持久化
-identity          当前请求的可信身份解析
-tools             Agent/MCP 工具及外部服务适配器
+  conversation      会话领域模型、归属校验、MySQL 持久化
+  identity          当前请求的可信身份解析
+  image             图片资产、任务队列、作品档案接口与 Worker
+  oss               私有对象存储直传策略、签名 URL、结果落盘
+  tools             Agent/MCP 工具及外部服务适配器
+zine              图片上传、提示词编译与图像生成提供商适配
 config            Spring 装配与外部化配置
 utils/vo/dto      跨模块的轻量基础类型
 ```
@@ -22,10 +25,14 @@ utils/vo/dto      跨模块的轻量基础类型
 3. 会话公开 ID、Redis memory key 和数据库主键各自承担不同职责：公开 ID 只用于 API，memory key 绑定租户/用户，数据库主键只用于关联消息。
 4. 天气数据源通过 `WeatherProvider` 扩展点降级，新增供应商不需要修改工具入口。
 5. SSE 的公开事件契约固定为 `SESSION_INFO -> DATA* -> STOP`；异常转为 `ERROR -> STOP`，前端无需处理半开连接。
+6. 图片编辑主链路是 `image-assets -> OSS 私有对象 -> image_job -> zine provider`，浏览器直传原图，Java 服务只处理对象键和元数据，避免大图长期占用应用堆内存。
+7. `zine` 模块通过 `ZineImageGenerationClient` 隔离百炼协议；Worker 使用短期签名源图 URL调用 Qwen Image，结果流式落到 OSS，再向前端返回短期签名结果 URL。
+8. `/mcp` 继续保留给结构化旅行工具；图片二次生成使用普通 HTTP/SSE，因为浏览器上传、进度轮询、权限校验和作品档案更适合 APP 自己编排。
 
 ## 下一阶段演进建议
 
 - 接入 Spring Security 后，让 `ChatIdentityResolver` 只消费认证主体，保留匿名身份作为本地 profile 的实现。
 - 将天气/Tavily 的同步工具调用迁移到支持响应式返回值的工具接口，彻底移除 `.block()`。
 - 增加 Actuator、请求关联 ID、模型调用耗时和工具降级指标。
+- 接入对象生命周期任务、用户删除接口、缩略图生成和图片内容安全审核。
 - 当会话查询/历史列表增长后，再把 `conversation` 拆成端口（domain）与 MyBatis 适配器（infrastructure）；当前规模保持模块化单体更易维护。

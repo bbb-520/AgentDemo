@@ -25,25 +25,33 @@ public class UserChatClientFactory {
     private final TavilySearcher tavilySearcher;
     private final String baseUrl;
     private final String model;
+    private final String visionModel;
 
     public UserChatClientFactory(String systemPrompt, ChatMemory chatMemory,
                                  WeatherService weatherService, TavilySearcher tavilySearcher,
                                  @Value("${spring.ai.openai.base-url}") String baseUrl,
-                                 @Value("${spring.ai.openai.chat.model:qwen-turbo}") String model) {
+                                 @Value("${spring.ai.openai.chat.model:qwen-turbo}") String model,
+                                 @Value("${spring.ai.openai.chat.vision-model:qwen-vl-plus}") String visionModel) {
         this.systemPrompt = systemPrompt;
         this.chatMemory = chatMemory;
         this.weatherService = weatherService;
         this.tavilySearcher = tavilySearcher;
         this.baseUrl = baseUrl;
         this.model = model;
+        this.visionModel = visionModel;
     }
 
     public ChatClient create(UserApiKeys keys) {
+        return create(keys, false);
+    }
+
+    /** Creates a client using a vision-capable model when the prompt contains OSS media. */
+    public ChatClient create(UserApiKeys keys, boolean multimodal) {
         if (!keys.hasQwen() || !keys.hasTavily()) {
             throw new IllegalStateException("请先在设置中同时配置 Qwen 和 Tavily API 密钥");
         }
         OpenAiChatOptions options = OpenAiChatOptions.builder()
-                .apiKey(keys.qwenApiKey()).baseUrl(baseUrl).model(model)
+                .apiKey(keys.qwenApiKey()).baseUrl(baseUrl).model(multimodal ? visionModel : model)
                 .timeout(Duration.ofSeconds(60)).maxRetries(2).build();
         OpenAiChatModel chatModel = OpenAiChatModel.builder().options(options).build();
         var tools = MethodToolCallbackProvider.builder()
