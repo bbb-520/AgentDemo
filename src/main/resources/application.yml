@@ -100,6 +100,7 @@ app:
     source-prefix: ${OSS_SOURCE_PREFIX:source}
     output-prefix: ${OSS_OUTPUT_PREFIX:output}
     thumbnail-prefix: ${OSS_THUMBNAIL_PREFIX:thumbnail}
+    archive-prefix: ${OSS_ARCHIVE_PREFIX:one-and-one}
     upload-policy-ttl: ${OSS_UPLOAD_POLICY_TTL:600s}
     signed-url-ttl: ${OSS_SIGNED_URL_TTL:600s}
     max-object-bytes: ${OSS_MAX_OBJECT_BYTES:20971520}

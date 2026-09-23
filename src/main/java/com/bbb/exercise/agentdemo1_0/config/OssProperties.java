@@ -16,6 +16,8 @@ public class OssProperties {
     private String sourcePrefix = "source";
     private String outputPrefix = "output";
     private String thumbnailPrefix = "thumbnail";
+    /** 只读相册对象前缀；前端通过后端签名接口读取，不暴露 OSS 密钥。 */
+    private String archivePrefix = "one-and-one";
     private Duration uploadPolicyTtl = Duration.ofMinutes(10);
     private Duration signedUrlTtl = Duration.ofMinutes(10);
     private long maxObjectBytes = 20L * 1024 * 1024;
@@ -38,6 +40,8 @@ public class OssProperties {
     public void setOutputPrefix(String outputPrefix) { this.outputPrefix = outputPrefix; }
     public String getThumbnailPrefix() { return thumbnailPrefix; }
     public void setThumbnailPrefix(String thumbnailPrefix) { this.thumbnailPrefix = thumbnailPrefix; }
+    public String getArchivePrefix() { return archivePrefix; }
+    public void setArchivePrefix(String archivePrefix) { this.archivePrefix = archivePrefix; }
     public Duration getUploadPolicyTtl() { return uploadPolicyTtl; }
     public void setUploadPolicyTtl(Duration uploadPolicyTtl) { this.uploadPolicyTtl = uploadPolicyTtl; }
     public Duration getSignedUrlTtl() { return signedUrlTtl; }

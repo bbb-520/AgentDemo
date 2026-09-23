@@ -10,6 +10,7 @@
 ALIYUN_OSS_REGION=cn-beijing
 ALIYUN_OSS_BUCKET=bbb-image-prod
 ALIYUN_OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com
+OSS_ARCHIVE_PREFIX=one-and-one
 ALIYUN_OSS_ACCESS_KEY_ID=<RAM 用户 AccessKeyId>
 ALIYUN_OSS_ACCESS_KEY_SECRET=<RAM 用户 AccessKeySecret>
 
@@ -45,6 +46,12 @@ IMAGE_JOBS_ENABLED=true
 
 服务端只从 `ALIYUN_OSS_ACCESS_KEY_ID` / `ALIYUN_OSS_ACCESS_KEY_SECRET` 读取凭据；浏览器拿到的是一次性/短期上传策略或签名读取 URL。
 
+## 私有相册读取
+
+相册照片放在 `${OSS_ARCHIVE_PREFIX}/` 前缀下（默认 `one-and-one/`）。前端通过
+`GET /api/photo-archive/{fileName}` 读取，服务端校验文件名并 302 到短期 OSS 签名 URL；
+不要把 Bucket 改为公共读，也不要把 AccessKey 写入前端配置。
+
 后端部署在阿里云 ECS/VPC 后，可以把 OSS Endpoint 切换为：
 
 ```text
@@ -69,6 +76,7 @@ database/bbb_agent_demo.sql
 - CORS 允许 `http://localhost:5173` 和 `http://127.0.0.1:5173`。
 - 生产环境只增加正式前端域名，不使用长期 `*`。
 - `source/` 保存上传原图，`output/` 保存结果，`thumbnail/` 预留缩略图。
+- `one-and-one/` 保存相册照片；如实际对象前缀不同，修改 `OSS_ARCHIVE_PREFIX`。
 - 浏览器只拿短期签名 URL，数据库不保存永久公网图片地址。
 - 建议为 `source/` 与 `output/` 配置生命周期规则（例如按业务保留期自动删除）；删除用户时同步删除对应对象和任务元数据。
 - 你提供的 CORS 配置（`http://localhost:5173`、`http://127.0.0.1:5173`，允许 POST/GET/PUT/DELETE/HEAD，允许请求头 `*`）可用于本地开发；生产只加入正式前端域名。
