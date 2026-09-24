@@ -19,7 +19,7 @@ import reactor.core.publisher.Mono;
  * 对话入口（WebFlux 响应式 HTTP 层）。
  *
  * <p>只做三件事：接收请求参数、解析会话键、把 {@link ChatService} 返回的 {@link Flux} 原样返回。
- * 业务逻辑（记忆、工具）全部下沉到 {@link ChatService}，本类保持「薄控制器」。
+ * 业务逻辑（记忆、图片任务）全部下沉到 {@link ChatService}，本类保持「薄控制器」。
  *
  * <p>唯一端点：{@code POST /api/chat} —— SSE 流式对话。
  */

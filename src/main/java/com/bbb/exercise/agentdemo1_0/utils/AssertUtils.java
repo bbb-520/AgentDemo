@@ -1,5 +1,7 @@
 package com.bbb.exercise.agentdemo1_0.utils;
 
+import org.springframework.util.StringUtils;
+
 /**
  * 断言工具类：校验失败时抛出 {@link IllegalArgumentException}，
  * 与本项目的参数校验风格保持一致。
@@ -7,7 +9,7 @@ package com.bbb.exercise.agentdemo1_0.utils;
 public class AssertUtils {
 
     public static void isNotBlank(String str, String... message) {
-        if (StringUtils.isBlank(str)) {
+        if (!StringUtils.hasText(str)) {
             handleException(message);
         }
     }

@@ -1,13 +1,17 @@
 package com.bbb.exercise.agentdemo1_0.image;
 
 import com.bbb.exercise.agentdemo1_0.config.OssProperties;
+import com.bbb.exercise.agentdemo1_0.auth.UserApiKeyService;
 import com.bbb.exercise.agentdemo1_0.dto.ChatAttachmentRequest;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
 import com.bbb.exercise.agentdemo1_0.oss.OssStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -21,23 +25,26 @@ public class ImageJobService {
     private final ImageAssetService assets;
     private final OssProperties ossProperties;
     private final OssStorageService storage;
+    private final UserApiKeyService userKeys;
 
     public JobView create(ChatIdentity identity, String conversationId, String question,
                           List<ChatAttachmentRequest> attachments) {
         if (attachments == null || attachments.isEmpty()) throw new IllegalArgumentException("请先上传一张照片");
         if (attachments.size() > 1) throw new IllegalArgumentException("当前一次只支持一张照片");
+        if (!userKeys.get(identity).hasQwen()) throw new IllegalStateException("请先在用户页配置阿里云 API Key");
         ChatAttachmentRequest attachment = attachments.get(0);
         ImageAssetService.AssetRecord source = assets.requireReady(identity, attachment.getAssetId());
         String jobId = UUID.randomUUID().toString();
         String ownerPart = source.objectKey().split("/").length > 1 ? source.objectKey().split("/")[1] : "private";
         String outputKey = ossProperties.getOutputPrefix() + "/" + ownerPart + "/"
                 + LocalDateTime.now().toLocalDate() + "/" + jobId + ".png";
-        String mode = inferMode(question);
+        String prompt = question == null || question.isBlank() ? "请根据这张照片进行一次有创意的二次生成。" : question.trim();
+        String mode = inferMode(prompt);
         LocalDateTime now = LocalDateTime.now();
         jdbc.update("INSERT INTO image_job(id,tenant_id,user_id,conversation_id,source_asset_id,source_object_key,output_object_key,mode,language,prompt,status,created_at,expires_at) "
                         + "VALUES (?,?,?,?,?,?,?,?,?,?,'QUEUED',?,?)",
                 jobId, identity.tenantId(), identity.userId(), conversationId, source.id(), source.objectKey(),
-                outputKey, mode, "chinese", question.trim(), now, now.plusDays(30));
+                outputKey, mode, "chinese", prompt, now, now.plusDays(30));
         return view(identity, jobId);
     }
 
@@ -68,6 +75,23 @@ public class ImageJobService {
 
     public JobView get(ChatIdentity identity, String jobId) { return view(identity, jobId); }
 
+    /** Resolve the publishable image from a trusted, successful job owned by this identity. */
+    public PublishSource requirePublishableOutput(ChatIdentity identity, String jobId) {
+        JobRecord job = requireOwnedJob(identity, jobId);
+        if (!"SUCCEEDED".equals(job.status()) || job.outputObjectKey() == null || job.outputObjectKey().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "只有成功生成的图片可以发布");
+        }
+        return new PublishSource(job.id(), job.outputObjectKey());
+    }
+
+    public String downloadUrl(ChatIdentity identity, String jobId) {
+        JobRecord job = requireOwnedJob(identity, jobId);
+        if (!"SUCCEEDED".equals(job.status()) || job.outputObjectKey() == null || job.outputObjectKey().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "只有成功生成的图片可以下载");
+        }
+        return storage.signedDownloadUrl(job.outputObjectKey(), "bobo-" + job.id() + ".png", Duration.ofMinutes(5));
+    }
+
     public List<JobView> conversation(ChatIdentity identity, String conversationId) {
         return jdbc.query("SELECT * FROM image_job WHERE tenant_id=? AND user_id=? AND conversation_id=? ORDER BY created_at",
                 (rs, rowNum) -> view(identity, map(rs)), identity.tenantId(), identity.userId(), conversationId);
@@ -80,10 +104,14 @@ public class ImageJobService {
     }
 
     private JobView view(ChatIdentity identity, String jobId) {
+        return view(identity, requireOwnedJob(identity, jobId));
+    }
+
+    private JobRecord requireOwnedJob(ChatIdentity identity, String jobId) {
         List<JobRecord> rows = jdbc.query("SELECT * FROM image_job WHERE id=? AND tenant_id=? AND user_id=?",
                 (rs, rowNum) -> map(rs), jobId, identity.tenantId(), identity.userId());
-        if (rows.isEmpty()) throw new IllegalArgumentException("图片任务不存在或不属于当前用户");
-        return view(identity, rows.get(0));
+        if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "图片任务不存在");
+        return rows.get(0);
     }
 
     private JobView view(ChatIdentity identity, JobRecord job) {
@@ -121,4 +149,6 @@ public class ImageJobService {
     public record JobView(String jobId, String status, String prompt, String mode,
                           LocalDateTime createdAt, LocalDateTime completedAt, String imageUrl,
                           String rationale, String error) {}
+
+    public record PublishSource(String jobId, String outputObjectKey) {}
 }

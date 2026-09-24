@@ -21,7 +21,6 @@ spring:
     timeout-per-shutdown-phase: 10s
   ai:
     openai:
-      api-key: ${QWEN_API_KEY:}
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
       timeout: 60s
       max-retries: 2
@@ -41,44 +40,6 @@ spring:
             time-to-live: 7d
             # 启动时自动建立记忆 JSON 索引
             initialize-schema: true
-
-    mcp:
-      client:
-        enabled: true
-        name: bbb-mcp-client
-        version: 1.0.0
-        type: async
-        request-timeout: 60s
-        toolcallback:
-          enabled: false
-      server:
-        enabled: true
-        name: bbb-mcp-server
-        version: 1.0.0
-        protocol: STREAMABLE
-        type: sync
-        # 工具集说明，宿主会作为背景提示交给模型
-        instructions: >-
-          出行助手工具集。getWeather 查询指定城市的实时天气（温度/天气/湿度/风速）；
-          getAttraction 根据城市与当前天气联网检索值得去的景点及理由。
-          推荐先调用 getWeather 拿到天气，再把天气描述传给 getAttraction。
-        annotation-scanner:
-          enabled: false
-        capabilities:
-          tool: true
-          prompt: false
-          resource: false
-          completion: false
-        request-timeout: 60s
-        streamable-http:
-          mcp-endpoint: /mcp
-
-tavily:
-  api-key: ${TAVILY_API_KEY:}
-  base-url: https://api.tavily.com
-  search-depth: advanced
-  max-results: 5
-  include-answer: true
 
 logging:
   charset:
@@ -100,14 +61,12 @@ app:
     source-prefix: ${OSS_SOURCE_PREFIX:source}
     output-prefix: ${OSS_OUTPUT_PREFIX:output}
     thumbnail-prefix: ${OSS_THUMBNAIL_PREFIX:thumbnail}
-    archive-prefix: ${OSS_ARCHIVE_PREFIX:one-and-one}
+    archive-prefix: ${OSS_ARCHIVE_PREFIX:one and one}
     upload-policy-ttl: ${OSS_UPLOAD_POLICY_TTL:600s}
     signed-url-ttl: ${OSS_SIGNED_URL_TTL:600s}
     max-object-bytes: ${OSS_MAX_OBJECT_BYTES:20971520}
   zine:
     enabled: ${ZINE_ENABLED:true}
-    # 优先使用 DASHSCOPE_API_KEY；兼容现有项目的 QWEN_API_KEY 命名。
-    api-key: ${DASHSCOPE_API_KEY:${QWEN_API_KEY:}}
     base-url: ${ZINE_IMAGE_BASE_URL:https://dashscope.aliyuncs.com/api/v1}
     endpoint: ${ZINE_IMAGE_ENDPOINT:/services/aigc/multimodal-generation/generation}
     model: ${ZINE_IMAGE_MODEL:qwen-image-3.0-pro}
@@ -125,23 +84,3 @@ app:
     anonymous-cookie-name: bbb_agent_anonymous_id
     session-cookie-name: bbb_agent_session
     default-tenant-id: local
-
----
-
-spring:
-  config:
-    activate:
-      on-profile: github
-  ai:
-    mcp:
-      client:
-        toolcallback:
-          enabled: true
-        stdio:
-          connections:
-            github:
-              command: cmd.exe
-              args: ["/c", "npx", "-y", "@modelcontextprotocol/server-github"]
-              env:
-                # 取自 Windows 用户级环境变量，配置文件里不再出现明文
-                GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:}

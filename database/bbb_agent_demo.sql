@@ -71,3 +71,54 @@ CREATE TABLE IF NOT EXISTS image_job (
     KEY idx_image_job_queue (status, created_at),
     CONSTRAINT fk_image_job_asset FOREIGN KEY (source_asset_id) REFERENCES image_asset (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS bobo_world_item (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    tenant_id VARCHAR(128) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    source_job_id CHAR(36) NOT NULL,
+    image_object_key VARCHAR(512) NOT NULL,
+    caption VARCHAR(500) NULL,
+    anonymous TINYINT(1) NOT NULL DEFAULT 1,
+    visibility VARCHAR(16) NOT NULL DEFAULT 'PUBLIC',
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    display_name_snapshot VARCHAR(64) NULL,
+    version INT NOT NULL DEFAULT 1,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    deleted_at DATETIME(3) NULL,
+    cleanup_pending TINYINT(1) NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_bobo_world_owner_job (tenant_id, user_id, source_job_id),
+    KEY idx_bobo_world_public (visibility, status, created_at, id),
+    KEY idx_bobo_world_owner (tenant_id, user_id, created_at, id),
+    KEY idx_bobo_world_cleanup (status, cleanup_pending, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS app_user (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    UNIQUE KEY uk_app_user_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS auth_session (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME(3) NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    UNIQUE KEY uk_auth_session_token (token_hash),
+    KEY idx_auth_session_expiry (expires_at),
+    CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES app_user (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_api_key (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    qwen_api_key_ciphertext TEXT NULL,
+    tavily_api_key_ciphertext TEXT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    UNIQUE KEY uk_user_api_key_user (user_id),
+    CONSTRAINT fk_user_api_key_user FOREIGN KEY (user_id) REFERENCES app_user (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

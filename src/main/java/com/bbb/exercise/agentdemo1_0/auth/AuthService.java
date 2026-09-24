@@ -56,7 +56,7 @@ public class AuthService {
     public ChatIdentity resolve(ServerWebExchange exchange) {
         var cookie = exchange.getRequest().getCookies().getFirst(properties.getSecurity().getSessionCookieName());
         if (cookie == null || cookie.getValue().isBlank()) return null;
-        var rows = jdbc.query("SELECT u.id,u.username,s.expires_at FROM auth_session s JOIN app_user u ON u.id=s.user_id "
+        var rows = jdbc.query("SELECT u.id,u.username FROM auth_session s JOIN app_user u ON u.id=s.user_id "
                         + "WHERE s.token_hash=? AND s.expires_at>?", (rs, n) -> new Object[]{
                         rs.getLong("id"), rs.getString("username")}, hash(cookie.getValue()), LocalDateTime.now());
         if (rows.isEmpty()) return null;
@@ -82,6 +82,16 @@ public class AuthService {
     public String username(ChatIdentity identity) {
         long userId = requireUserId(identity);
         return jdbc.queryForObject("SELECT username FROM app_user WHERE id=?", String.class, userId);
+    }
+
+    /** Stable public identifier derived from the internal user id without exposing the sequence value. */
+    public String publicUserId(User user) {
+        return UUID.nameUUIDFromBytes(("bobo:user:" + user.id()).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    public String publicUserId(ChatIdentity identity) {
+        long userId = requireUserId(identity);
+        return publicUserId(new User(userId, username(identity), ""));
     }
 
     private User find(String username) {

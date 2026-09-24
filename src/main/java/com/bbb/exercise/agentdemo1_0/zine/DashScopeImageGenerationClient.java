@@ -37,12 +37,12 @@ public class DashScopeImageGenerationClient implements ZineImageGenerationClient
     }
 
     @Override
-    public Mono<ZineImageResult> generate(String imageDataUrl, String prompt) {
+    public Mono<ZineImageResult> generate(String imageDataUrl, String prompt, String apiKey) {
         if (!properties.isEnabled()) {
             return Mono.error(new IllegalStateException("图片生成服务未启用，请设置 app.zine.enabled=true"));
         }
-        if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
-            return Mono.error(new IllegalStateException("未配置图片生成 API Key，请设置 QWEN_API_KEY 或 DASHSCOPE_API_KEY"));
+        if (apiKey == null || apiKey.isBlank()) {
+            return Mono.error(new IllegalStateException("请先在用户页配置阿里云 API Key"));
         }
 
         Map<String, Object> request = Map.of(
@@ -63,7 +63,7 @@ public class DashScopeImageGenerationClient implements ZineImageGenerationClient
                 .uri(properties.getEndpoint())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Bearer " + properties.getApiKey())
+                .header("Authorization", "Bearer " + apiKey)
                 .bodyValue(request)
                 .retrieve()
                 .onStatus(status -> status.isError(), response -> response.bodyToMono(String.class)

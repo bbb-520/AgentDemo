@@ -9,7 +9,6 @@ import java.time.Duration;
 public class ZineProperties {
 
     private boolean enabled = true;
-    private String apiKey = "";
     private String baseUrl = "https://dashscope.aliyuncs.com/api/v1";
     private String endpoint = "/services/aigc/multimodal-generation/generation";
     private String model = "qwen-image-3.0-pro";
@@ -25,14 +24,6 @@ public class ZineProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-    }
-
-    public String getApiKey() {
-        return apiKey;
-    }
-
-    public void setApiKey(String apiKey) {
-        this.apiKey = apiKey;
     }
 
     public String getBaseUrl() {

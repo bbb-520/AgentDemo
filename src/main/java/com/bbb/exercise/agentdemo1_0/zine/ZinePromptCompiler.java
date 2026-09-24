@@ -57,7 +57,8 @@ public class ZinePromptCompiler {
                 Reproduction mood: tactile paper fibers, restrained grain, dry ink or halftone behavior, slight
                 scan noise, imperfect print coverage, active negative space, and an editorial quietness. Add no
                 logos, CTA, watermark, glossy 3D, cinematic lighting, anime, cute cartoon, dense scrapbooking,
-                multiple competing illustration styles, extra bright hues, or polished headline typography.
+                multiple competing illustration styles, extra bright hues, typography, labels, letters, numbers,
+                logos, watermarks, buttons, or any other written copy.
                 """.formatted(textInstruction, guidanceInstruction);
     }
 
@@ -66,7 +67,7 @@ public class ZinePromptCompiler {
                 Create an independently compelling Scene Distillation Zine poster from the supplied reference image.
                 Inspect the image first and build an internal Distillation Card: semantic nucleus, one core subject,
                 one to three supporting cues, dominant gesture, one meaningful spatial relationship, visual-weight
-                map, native palette, material or weather behavior, emotional residue, discard list, and two to four
+                map, native palette, material or environmental behavior, emotional residue, discard list, and two to four
                 source anchors. Then write one specific expressive proposition, one central tension, and one
                 source-derived visual metaphor. Recompose freely; the final artwork must stand on its own without
                 the source photo.
@@ -87,9 +88,8 @@ public class ZinePromptCompiler {
 
                 %s
                 %s
-                Typography is authorial material, not a mandatory caption. Use the supplied wording exactly when
-                present; otherwise decide whether a short text fragment helps the proposition. Make it legible only
-                to the degree that the artwork needs. Keep the result tactile, flat, poetic, non-commercial, and
+                Do not add typography, captions, labels, letters, numbers, logos, watermarks, buttons, or any other
+                written copy. Keep the result tactile, flat, poetic, non-commercial, and
                 free of logos, CTA, glossy 3D, cinematic lighting, depth of field, anime, cute cartoon, generic
                 symbols, arbitrary dots or grids, decorative scrapbook elements, and watermarks.
 
@@ -101,14 +101,10 @@ public class ZinePromptCompiler {
 
     private static String textInstruction(ZineLanguage language, String text) {
         if (!text.isEmpty()) {
-            return "Micro-text supplied by the user: reproduce this wording exactly and do not translate or expand it: «"
-                    + text + "». Integrate it into the paper without making it a headline.";
+            return "User creative direction (use only as visual guidance; never render it as text): «"
+                    + text + "». Do not reproduce, translate, typeset, watermark, or embed any part of these words in the image.";
         }
-        return switch (language) {
-            case CHINESE -> "Author one compact Chinese-only micro-text line from a visible cue or emotional residue; keep it to 8 Han characters or fewer and place it in quiet paper.";
-            case BILINGUAL -> "Author a compact Chinese–English pair from the scene; keep Chinese to 8 Han characters or fewer and English to 5 words or fewer, with one quiet primary line and a smaller echo.";
-            case ENGLISH -> "Author one compact English-only micro-text line from a visible cue or emotional residue; keep it to 5 words or fewer and place it in quiet paper.";
-        };
+        return "No typography or written copy: do not add words, characters, letters, numbers, symbols, labels, logos, or watermarks to the image.";
     }
 
     private static String clean(String value) {

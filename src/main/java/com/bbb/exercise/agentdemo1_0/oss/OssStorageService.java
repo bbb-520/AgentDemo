@@ -4,7 +4,11 @@ import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.HttpMethod;
 import com.aliyun.oss.model.GeneratePresignedUrlRequest;
+import com.aliyun.oss.model.ListObjectsRequest;
+import com.aliyun.oss.model.ObjectListing;
 import com.aliyun.oss.model.ObjectMetadata;
+import com.aliyun.oss.model.ResponseHeaderOverrides;
+import com.aliyun.oss.model.OSSObjectSummary;
 import com.bbb.exercise.agentdemo1_0.config.OssProperties;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +24,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Base64;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -64,13 +73,85 @@ public class OssStorageService {
         return client().getObjectMetadata(properties.getBucket(), objectKey);
     }
 
-    public String signedGetUrl(String objectKey) {
+    /** Lists direct image children only; keys remain private and are never returned to the browser. */
+    public List<ArchiveImage> listArchiveImages(String archivePrefix) {
         requireConfigured();
-        Date expires = Date.from(Instant.now().plus(properties.getSignedUrlTtl()));
+        String normalizedPrefix = archivePrefix == null ? "" : archivePrefix.trim().replaceAll("^/+|/+$", "");
+        if (normalizedPrefix.isBlank()) throw new IllegalArgumentException("OSS 相册前缀不能为空");
+        String objectPrefix = normalizedPrefix + "/";
+        List<ArchiveImage> images = new ArrayList<>();
+        String marker = null;
+
+        do {
+            ListObjectsRequest request = new ListObjectsRequest(properties.getBucket());
+            request.setPrefix(objectPrefix);
+            request.setMarker(marker);
+            request.setMaxKeys(1000);
+            ObjectListing listing = client().listObjects(request);
+            for (OSSObjectSummary object : listing.getObjectSummaries()) {
+                String key = object.getKey();
+                if (key == null || !key.startsWith(objectPrefix)) continue;
+                String filename = key.substring(objectPrefix.length());
+                // This album is a flat folder. Ignore subfolders and the console's folder marker object.
+                if (filename.isBlank() || filename.length() > 180 || filename.contains("..")
+                        || filename.contains("/") || filename.contains("\\") || !isSupportedImage(filename)) continue;
+                images.add(new ArchiveImage(filename, object.getSize()));
+            }
+            if (!listing.isTruncated()) break;
+            String nextMarker = listing.getNextMarker();
+            if (nextMarker == null || nextMarker.isBlank() || nextMarker.equals(marker)) {
+                throw new IllegalStateException("OSS 相册分页标记无效");
+            }
+            marker = nextMarker;
+        } while (true);
+
+        images.sort(Comparator.comparing(ArchiveImage::filename, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(ArchiveImage::filename));
+        return List.copyOf(images);
+    }
+
+    public String signedGetUrl(String objectKey) {
+        return signedGetUrl(objectKey, null);
+    }
+
+    public String signedGetUrl(String objectKey, String process) {
+        return signedGetUrl(objectKey, process, properties.getSignedUrlTtl());
+    }
+
+    public String signedGetUrl(String objectKey, String process, Duration ttl) {
+        requireConfigured();
+        if (objectKey == null || objectKey.isBlank()) throw new IllegalArgumentException("OSS 对象键不能为空");
+        Duration safeTtl = ttl == null || ttl.isNegative() || ttl.isZero() ? properties.getSignedUrlTtl() : ttl;
+        Date expires = Date.from(Instant.now().plus(safeTtl));
         GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(
                 properties.getBucket(), objectKey, HttpMethod.GET);
         request.setExpiration(expires);
+        if (process != null && !process.isBlank()) {
+            request.setProcess(process);
+        }
         return client().generatePresignedUrl(request).toExternalForm();
+    }
+
+    /** Creates a short private link that asks the browser to save the result as a file. */
+    public String signedDownloadUrl(String objectKey, String filename, Duration ttl) {
+        requireConfigured();
+        if (objectKey == null || objectKey.isBlank()) throw new IllegalArgumentException("OSS 对象键不能为空");
+        Duration safeTtl = ttl == null || ttl.isNegative() || ttl.isZero() ? properties.getSignedUrlTtl() : ttl;
+        Date expires = Date.from(Instant.now().plus(safeTtl));
+        GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(
+                properties.getBucket(), objectKey, HttpMethod.GET);
+        request.setExpiration(expires);
+        String safeFilename = filename == null ? "bobo-image.png" : filename.replaceAll("[^A-Za-z0-9._-]", "_");
+        ResponseHeaderOverrides headers = new ResponseHeaderOverrides();
+        headers.setContentDisposition("attachment; filename=\"" + safeFilename + "\"");
+        request.setResponseHeaders(headers);
+        return client().generatePresignedUrl(request).toExternalForm();
+    }
+
+    public void deleteObject(String objectKey) {
+        requireConfigured();
+        if (objectKey == null || objectKey.isBlank()) throw new IllegalArgumentException("OSS 对象键不能为空");
+        client().deleteObject(properties.getBucket(), objectKey);
     }
 
     public void putFile(String objectKey, Path file, String contentType) throws IOException {
@@ -103,11 +184,6 @@ public class OssStorageService {
         } finally {
             Files.deleteIfExists(temporary);
         }
-    }
-
-    public void delete(String objectKey) {
-        if (objectKey == null || objectKey.isBlank() || !configured()) return;
-        client().deleteObject(properties.getBucket(), objectKey);
     }
 
     /** Worker 启动前的轻量配置探测，不会创建 SDK 客户端，也不会打印密钥。 */
@@ -166,10 +242,18 @@ public class OssStorageService {
 
     private static boolean notBlank(String value) { return value != null && !value.isBlank(); }
 
+    private static boolean isSupportedImage(String filename) {
+        String lower = filename.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
+                || lower.endsWith(".webp") || lower.endsWith(".gif") || lower.endsWith(".bmp")
+                || lower.endsWith(".avif");
+    }
+
     @PreDestroy
     public void close() {
         if (oss != null) oss.shutdown();
     }
 
     public record UploadPolicy(String uploadUrl, Map<String, String> fields, Instant expiresAt) {}
+    public record ArchiveImage(String filename, long size) {}
 }

@@ -17,7 +17,7 @@ public class OssProperties {
     private String outputPrefix = "output";
     private String thumbnailPrefix = "thumbnail";
     /** 只读相册对象前缀；前端通过后端签名接口读取，不暴露 OSS 密钥。 */
-    private String archivePrefix = "one-and-one";
+    private String archivePrefix = "one and one";
     private Duration uploadPolicyTtl = Duration.ofMinutes(10);
     private Duration signedUrlTtl = Duration.ofMinutes(10);
     private long maxObjectBytes = 20L * 1024 * 1024;

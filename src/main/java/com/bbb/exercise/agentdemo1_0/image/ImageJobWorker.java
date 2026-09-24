@@ -1,6 +1,8 @@
 package com.bbb.exercise.agentdemo1_0.image;
 
 import com.bbb.exercise.agentdemo1_0.oss.OssStorageService;
+import com.bbb.exercise.agentdemo1_0.auth.UserApiKeyService;
+import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
 import com.bbb.exercise.agentdemo1_0.zine.ZineGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,20 +23,22 @@ public class ImageJobWorker {
     private final ImageJobService jobs;
     private final OssStorageService storage;
     private final ZineGenerationService generation;
+    private final UserApiKeyService userKeys;
 
     @Value("${app.image-jobs.max-attempts:2}")
     private int maxAttempts;
 
     @Scheduled(fixedDelayString = "${app.image-jobs.poll-interval:3000ms}", initialDelay = 5000)
     public void poll() {
-        // 占位配置或本地仅跑聊天功能时不触碰 image_job 表，避免未迁移数据库时反复报错。
+        // OSS 未配置时不领取任务，避免生成结果无法保存。
         if (!storage.isConfigured()) return;
         ImageJobService.JobRecord job = jobs.claimNext();
         if (job == null) return;
         try {
+            String apiKey = userKeys.get(new ChatIdentity(job.tenantId(), job.userId(), true)).qwenApiKey();
             String sourceUrl = storage.signedGetUrl(job.sourceObjectKey());
             ZineGenerationService.ProviderGeneration generated = generation
-                    .generateFromSourceUrl(sourceUrl, job.mode(), job.language(), job.prompt())
+                    .generateFromSourceUrl(sourceUrl, job.mode(), job.language(), job.prompt(), apiKey)
                     .block(Duration.ofMinutes(4));
             if (generated == null || generated.result() == null || generated.result().imageUrl() == null) {
                 throw new IllegalStateException("图片模型没有返回结果");

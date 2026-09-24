@@ -20,7 +20,7 @@ public class AuthController {
     public Mono<Map<String, Object>> register(@RequestBody Credentials body, ServerWebExchange exchange) {
         return Mono.fromCallable(() -> {
             AuthService.User user = auth.register(body.username(), body.password());
-            return Map.<String, Object>of("username", user.username());
+            return Map.<String, Object>of("authenticated", false, "userId", auth.publicUserId(user), "username", user.username());
         }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 
@@ -29,7 +29,7 @@ public class AuthController {
         return Mono.fromCallable(() -> {
             AuthService.LoginResult result = auth.login(body.username(), body.password());
             exchange.getResponse().addCookie(cookie(exchange, result.token(), auth.sessionTtl()));
-            return Map.<String, Object>of("username", result.user().username());
+            return Map.<String, Object>of("authenticated", true, "userId", auth.publicUserId(result.user()), "username", result.user().username());
         }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 
@@ -46,7 +46,7 @@ public class AuthController {
         return Mono.fromCallable(() -> {
             var identity = auth.resolve(exchange);
             if (identity == null) throw new AuthService.AuthException(401, "未登录");
-            return Map.<String, Object>of("authenticated", true, "username", auth.username(identity));
+            return Map.<String, Object>of("authenticated", true, "userId", auth.publicUserId(identity), "username", auth.username(identity));
         }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 

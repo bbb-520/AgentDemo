@@ -28,14 +28,14 @@ public class ZineGenerationService {
 
     public Mono<ZineGenerationResponse> generate(byte[] source, String contentType,
                                                  String modeValue, String languageValue,
-                                                 String text, String guidance) {
+                                                 String text, String guidance, String apiKey) {
         validateSource(source, contentType);
         ZineMode mode = ZineMode.parse(modeValue);
         ZineLanguage language = ZineLanguage.parse(languageValue);
         ZinePromptCompiler.CompiledPrompt compiled = promptCompiler.compile(mode, language, text, guidance);
         String imageDataUrl = "data:" + contentType + ";base64," + Base64.getEncoder().encodeToString(source);
 
-        return imageGenerationClient.generate(imageDataUrl, compiled.prompt())
+        return imageGenerationClient.generate(imageDataUrl, compiled.prompt(), apiKey)
                 .map(result -> new ZineGenerationResponse(
                         mode.name().toLowerCase(),
                         properties.getModel(),
@@ -46,11 +46,11 @@ public class ZineGenerationService {
 
     /** OSS-backed path: pass a short-lived signed URL to the provider instead of a Base64 request body. */
     public Mono<ProviderGeneration> generateFromSourceUrl(String sourceUrl, String modeValue,
-                                                           String languageValue, String text) {
+                                                           String languageValue, String text, String apiKey) {
         ZineMode mode = ZineMode.parse(modeValue);
         ZineLanguage language = ZineLanguage.parse(languageValue);
         ZinePromptCompiler.CompiledPrompt compiled = promptCompiler.compile(mode, language, text, null);
-        return imageGenerationClient.generate(sourceUrl, compiled.prompt())
+        return imageGenerationClient.generate(sourceUrl, compiled.prompt(), apiKey)
                 .map(result -> new ProviderGeneration(result, compiled.rationale()));
     }
 

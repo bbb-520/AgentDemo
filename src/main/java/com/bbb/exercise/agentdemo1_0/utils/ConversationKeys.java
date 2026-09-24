@@ -1,6 +1,7 @@
 package com.bbb.exercise.agentdemo1_0.utils;
 
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
+import org.springframework.util.StringUtils;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -35,7 +36,7 @@ public final class ConversationKeys {
      * @throws IllegalArgumentException 非空输入不是完整 UUID
      */
     public static String requireExistingOrNull(String sessionId) {
-        if (StringUtils.isBlank(sessionId)) {
+        if (!StringUtils.hasText(sessionId)) {
             return null;
         }
         if (!UUID_PATTERN.matcher(sessionId).matches()) {

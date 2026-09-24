@@ -28,7 +28,7 @@ public class UserApiKeyController {
     @PutMapping
     public Mono<Map<String, Boolean>> save(@RequestBody ApiKeys body, ServerWebExchange exchange) {
         return identities.resolveRequired(exchange)
-                .doOnNext(identity -> keys.save(identity, body.qwenApiKey(), body.tavilyApiKey()))
+                .doOnNext(identity -> keys.save(identity, body.qwenApiKey()))
                 .thenReturn(Map.of("saved", true))
                 .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
@@ -47,5 +47,5 @@ public class UserApiKeyController {
                 .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 
-    public record ApiKeys(String qwenApiKey, String tavilyApiKey) {}
+    public record ApiKeys(String qwenApiKey) {}
 }
