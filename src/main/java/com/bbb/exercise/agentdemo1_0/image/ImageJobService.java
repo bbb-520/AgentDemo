@@ -6,6 +6,7 @@ import com.bbb.exercise.agentdemo1_0.dto.ChatAttachmentRequest;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
 import com.bbb.exercise.agentdemo1_0.oss.OssStorageService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
@@ -19,7 +20,10 @@ import java.util.UUID;
 /** 图片生成任务的持久化、所有权校验和状态转换。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ImageJobService {
+
+    private static final int MAX_PROMPT_CODE_POINTS = 4000;
 
     private final JdbcTemplate jdbc;
     private final ImageAssetService assets;
@@ -29,22 +33,34 @@ public class ImageJobService {
 
     public JobView create(ChatIdentity identity, String conversationId, String question,
                           List<ChatAttachmentRequest> attachments) {
+        if (identity == null) throw new IllegalArgumentException("身份不能为空");
+        if (conversationId == null || conversationId.isBlank()) {
+            throw new IllegalArgumentException("会话 ID 不能为空");
+        }
         if (attachments == null || attachments.isEmpty()) throw new IllegalArgumentException("请先上传一张照片");
         if (attachments.size() > 1) throw new IllegalArgumentException("当前一次只支持一张照片");
-        if (!userKeys.get(identity).hasQwen()) throw new IllegalStateException("请先在用户页配置阿里云 API Key");
         ChatAttachmentRequest attachment = attachments.get(0);
+        if (attachment == null || attachment.getAssetId() == null || attachment.getAssetId().isBlank()) {
+            throw new IllegalArgumentException("图片资产 ID 不能为空");
+        }
+        if (question != null && question.codePointCount(0, question.length()) > MAX_PROMPT_CODE_POINTS) {
+            throw new IllegalArgumentException("问题过长（上限 " + MAX_PROMPT_CODE_POINTS + " 字符）");
+        }
+        if (!userKeys.get(identity).hasQwen()) throw new IllegalStateException("请先在用户页配置阿里云 API Key");
         ImageAssetService.AssetRecord source = assets.requireReady(identity, attachment.getAssetId());
         String jobId = UUID.randomUUID().toString();
         String ownerPart = source.objectKey().split("/").length > 1 ? source.objectKey().split("/")[1] : "private";
+        LocalDateTime now = LocalDateTime.now();
         String outputKey = ossProperties.getOutputPrefix() + "/" + ownerPart + "/"
-                + LocalDateTime.now().toLocalDate() + "/" + jobId + ".png";
+                + now.toLocalDate() + "/" + jobId + ".png";
         String prompt = question == null || question.isBlank() ? "请根据这张照片进行一次有创意的二次生成。" : question.trim();
         String mode = inferMode(prompt);
-        LocalDateTime now = LocalDateTime.now();
         jdbc.update("INSERT INTO image_job(id,tenant_id,user_id,conversation_id,source_asset_id,source_object_key,output_object_key,mode,language,prompt,status,created_at,expires_at) "
                         + "VALUES (?,?,?,?,?,?,?,?,?,?,'QUEUED',?,?)",
                 jobId, identity.tenantId(), identity.userId(), conversationId, source.id(), source.objectKey(),
                 outputKey, mode, "chinese", prompt, now, now.plusDays(30));
+        log.info("[image-job] task_received jobId={} conversationId={} receivedAt={} mode={}",
+                jobId, conversationId, now, mode);
         return view(identity, jobId);
     }
 
@@ -53,14 +69,25 @@ public class ImageJobService {
                 (rs, rowNum) -> map(rs), LocalDateTime.now());
         if (jobs.isEmpty()) return null;
         JobRecord job = jobs.get(0);
+        LocalDateTime startedAt = LocalDateTime.now();
         int updated = jdbc.update("UPDATE image_job SET status='PROCESSING',started_at=?,attempt_count=attempt_count+1 WHERE id=? AND status='QUEUED'",
-                LocalDateTime.now(), job.id());
+                startedAt, job.id());
+        if (updated == 1) {
+            log.info("[image-job] task_claimed jobId={} startedAt={}", job.id(), startedAt);
+        }
         return updated == 1 ? job : null;
     }
 
     public void succeed(String jobId, String outputKey, String rationale, String providerRequestId) {
-        jdbc.update("UPDATE image_job SET status='SUCCEEDED',output_object_key=?,rationale=?,provider_request_id=?,completed_at=?,error_message=NULL WHERE id=?",
-                outputKey, rationale, providerRequestId, LocalDateTime.now(), jobId);
+        LocalDateTime completedAt = LocalDateTime.now();
+        int updated = jdbc.update("UPDATE image_job SET status='SUCCEEDED',output_object_key=?,rationale=?,provider_request_id=?,completed_at=?,error_message=NULL "
+                        + "WHERE id=? AND status='PROCESSING'",
+                outputKey, rationale, providerRequestId, completedAt, jobId);
+        if (updated != 1) {
+            log.warn("[image-job] task_completion_ignored jobId={} completedAt={} reason=unexpected_status", jobId, completedAt);
+            return;
+        }
+        log.info("[image-job] task_completed jobId={} completedAt={} result=SUCCEEDED", jobId, completedAt);
     }
 
     public void fail(String jobId, String message, int maxAttempts) {
@@ -68,9 +95,16 @@ public class ImageJobService {
         if (safe.length() > 1000) safe = safe.substring(0, 1000);
         int attempts = Math.max(1, maxAttempts);
         LocalDateTime completedAt = LocalDateTime.now();
-        jdbc.update("UPDATE image_job SET status=CASE WHEN attempt_count < ? THEN 'QUEUED' ELSE 'FAILED' END,"
-                        + "error_message=?,completed_at=CASE WHEN attempt_count < ? THEN NULL ELSE ? END WHERE id=?",
+        int updated = jdbc.update("UPDATE image_job SET status=CASE WHEN attempt_count < ? THEN 'QUEUED' ELSE 'FAILED' END,"
+                        + "error_message=?,completed_at=CASE WHEN attempt_count < ? THEN NULL ELSE ? END "
+                        + "WHERE id=? AND status='PROCESSING'",
                 attempts, safe, attempts, completedAt, jobId);
+        if (updated != 1) {
+            log.warn("[image-job] task_failure_ignored jobId={} completedAt={} reason=unexpected_status", jobId, completedAt);
+            return;
+        }
+        log.info("[image-job] task_completed jobId={} completedAt={} result={} error={}",
+                jobId, completedAt, "retry_or_failed", safe);
     }
 
     public JobView get(ChatIdentity identity, String jobId) { return view(identity, jobId); }
@@ -93,6 +127,9 @@ public class ImageJobService {
     }
 
     public List<JobView> conversation(ChatIdentity identity, String conversationId) {
+        if (conversationId == null || conversationId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "conversationId 不能为空");
+        }
         return jdbc.query("SELECT * FROM image_job WHERE tenant_id=? AND user_id=? AND conversation_id=? ORDER BY created_at",
                 (rs, rowNum) -> view(identity, map(rs)), identity.tenantId(), identity.userId(), conversationId);
     }
@@ -108,6 +145,10 @@ public class ImageJobService {
     }
 
     private JobRecord requireOwnedJob(ChatIdentity identity, String jobId) {
+        if (identity == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        if (jobId == null || jobId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "jobId 不能为空");
+        }
         List<JobRecord> rows = jdbc.query("SELECT * FROM image_job WHERE id=? AND tenant_id=? AND user_id=?",
                 (rs, rowNum) -> map(rs), jobId, identity.tenantId(), identity.userId());
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "图片任务不存在");
@@ -117,7 +158,7 @@ public class ImageJobService {
     private JobView view(ChatIdentity identity, JobRecord job) {
         String url = "SUCCEEDED".equals(job.status()) && job.outputObjectKey() != null
                 ? storage.signedGetUrl(job.outputObjectKey()) : null;
-        return new JobView(job.id(), job.status(), job.prompt(), job.mode(), job.createdAt(),
+        return new JobView(job.id(), job.status(), job.prompt(), job.mode(), job.createdAt(), job.startedAt(),
                 job.completedAt(), url, job.rationale(), job.errorMessage());
     }
 
@@ -143,11 +184,16 @@ public class ImageJobService {
     public record JobRecord(String id, String tenantId, String userId, String conversationId,
                             String sourceObjectKey, String outputObjectKey, String mode, String language,
                             String prompt, String status, String rationale, String providerRequestId,
-                            String errorMessage, LocalDateTime createdAt, LocalDateTime startedAt,
-                            LocalDateTime completedAt) {}
+                            String errorMessage,
+                            /** 服务端创建队列任务的时间。 */ LocalDateTime createdAt,
+                            /** Worker 成功领取任务的时间。 */ LocalDateTime startedAt,
+                            /** 成功或最终失败的时间。 */ LocalDateTime completedAt) {}
 
     public record JobView(String jobId, String status, String prompt, String mode,
-                          LocalDateTime createdAt, LocalDateTime completedAt, String imageUrl,
+                          /** 任务进入队列的时间，也就是服务端收到并接受任务的时间。 */ LocalDateTime createdAt,
+                          /** Worker 开始处理任务的时间。 */ LocalDateTime startedAt,
+                          /** 任务成功或最终失败的时间；重试中的任务暂为空。 */ LocalDateTime completedAt,
+                          String imageUrl,
                           String rationale, String error) {}
 
     public record PublishSource(String jobId, String outputObjectKey) {}

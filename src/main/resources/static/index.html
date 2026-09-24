@@ -48,6 +48,19 @@
           <span class="folio-number">A—001</span>
         </div>
 
+        <section class="api-key-panel" aria-labelledby="api-key-title">
+          <div>
+            <span class="section-kicker">你的模型凭据</span>
+            <h2 id="api-key-title">阿里云 API Key</h2>
+            <p id="api-key-status" class="api-key-status">尚未配置。Key 会加密保存在当前用户下。</p>
+          </div>
+          <div class="api-key-actions">
+            <input id="qwen-api-key" type="password" autocomplete="new-password" placeholder="粘贴 DashScope API Key" aria-label="阿里云 API Key" />
+            <button id="save-api-key" type="button">保存 Key</button>
+            <button id="clear-api-key" type="button" hidden>清除</button>
+          </div>
+        </section>
+
         <div class="paper-stage" id="paper-stage">
           <div class="empty-state" id="empty-state">
             <div class="torn-mark" aria-hidden="true"></div>

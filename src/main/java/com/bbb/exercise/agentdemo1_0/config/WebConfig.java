@@ -27,7 +27,7 @@ public class WebConfig {
         // 表面上看起来像“密钥保存失败”，并且后续刷新时无法进入在线模式。
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        config.setExposedHeaders(List.of("Content-Type"));
+        config.setExposedHeaders(List.of("Content-Type", "X-Request-Id"));
         // /api/chat 使用 HttpOnly 匿名 Cookie 绑定会话归属；跨域前端必须携带凭据。
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

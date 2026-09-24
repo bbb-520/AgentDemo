@@ -1,6 +1,7 @@
 package com.bbb.exercise.agentdemo1_0.chat;
 
 import com.bbb.exercise.agentdemo1_0.dto.ChatRequest;
+import com.bbb.exercise.agentdemo1_0.observability.RequestTimingWebFilter;
 import com.bbb.exercise.agentdemo1_0.vo.ChatEventVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.time.Instant;
 
 
 /**
@@ -40,11 +43,14 @@ public class ChatController {
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Mono<ResponseEntity<Flux<ChatEventVO>>> chat(@RequestBody(required = false) ChatRequest request,
                                                         ServerWebExchange exchange) {
+        Instant receivedAt = Instant.now();
+        String requestId = exchange.getAttribute(RequestTimingWebFilter.REQUEST_ID_ATTRIBUTE);
         // 允许空 body：request 为 null 时用空对象兜底，交给 ChatService 做参数校验
         ChatRequest safe = request == null ? new ChatRequest() : request;
         String invalid = ChatService.validateQuestion(safe.getQuestion(),
                 safe.getAttachments() != null && !safe.getAttachments().isEmpty());
         if (invalid != null) {
+            log.info("[chat] message_rejected requestId={} receivedAt={} reason={}", requestId, receivedAt, invalid);
             return Mono.just(ResponseEntity.ok()
                     .contentType(MediaType.TEXT_EVENT_STREAM)
                     .body(Flux.just(
@@ -52,13 +58,23 @@ public class ChatController {
                             ChatEventVO.builder().eventType(com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum.STOP.getValue()).build())));
         }
 
-        log.info("[chat] 流式请求 sessionIdPresent={} questionLength={}",
+        log.info("[chat] message_received requestId={} receivedAt={} sessionIdPresent={} questionLength={}",
+                requestId, receivedAt,
                 safe.getSessionId() != null && !safe.getSessionId().isBlank(),
-                safe.getQuestion() == null ? 0 : safe.getQuestion().length());
+                safe.getQuestion() == null ? 0 : safe.getQuestion().codePointCount(0, safe.getQuestion().length()));
         return identityResolver.resolveRequired(exchange)
                 .flatMap(identity -> chatService.openConversation(safe.getSessionId(), identity)
                         .map(session -> ResponseEntity.ok()
                                 .contentType(MediaType.TEXT_EVENT_STREAM)
-                                .body(chatService.chat(safe.getQuestion(), session, safe.getAttachments()))));
+                                .body(chatService.chat(safe.getQuestion(), session, safe.getAttachments()))))
+                .doOnError(error -> log.warn("[chat] message_setup_failed requestId={} receivedAt={} errorType={} message={}",
+                        requestId, receivedAt, error.getClass().getSimpleName(), safeMessage(error)));
+    }
+
+    private static String safeMessage(Throwable error) {
+        String message = error == null ? null : error.getMessage();
+        return message == null || message.isBlank()
+                ? (error == null ? "unknown" : error.getClass().getSimpleName())
+                : message.replaceAll("[\\r\\n]+", " ");
     }
 }

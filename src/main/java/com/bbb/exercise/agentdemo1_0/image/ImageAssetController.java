@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 /** OSS 直传策略与上传完成确认接口。 */
 @RestController
@@ -23,13 +24,15 @@ public class ImageAssetController {
     public Mono<ResponseEntity<ImageAssetService.UploadPolicyView>> uploadPolicy(
             @RequestBody ImageAssetService.UploadPolicyRequest request, ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.ok(assets.createPolicy(identity, request)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(assets.createPolicy(identity, request))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @PostMapping("/{assetId}/complete")
     public Mono<ResponseEntity<ImageAssetService.AssetView>> complete(
             @PathVariable String assetId, ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.ok(assets.complete(identity, assetId)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(assets.complete(identity, assetId))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

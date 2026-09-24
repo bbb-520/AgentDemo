@@ -3,6 +3,16 @@ server:
   shutdown: graceful
 
 spring:
+  # API keys are user-scoped and loaded per request. Do not create the
+  # unused singleton OpenAI clients, which require a server-wide key at boot.
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
   codec:
     # 图片编辑接口默认允许 10 MB 源图，并留出 multipart / JSON 包装余量。
     max-in-memory-size: 12MB

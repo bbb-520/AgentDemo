@@ -3,6 +3,7 @@ package com.bbb.exercise.agentdemo1_0.conversation;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
 import com.bbb.exercise.agentdemo1_0.utils.ConversationKeys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 
 /** 会话归属和长期消息存储。 */
 @Service
+@Slf4j
 public class ConversationPersistenceService {
     private final ConversationMapper conversationMapper;
     private final ChatMessageMapper messageMapper;
@@ -69,11 +71,23 @@ public class ConversationPersistenceService {
 
     @Transactional
     public void appendAssistantMessage(ConversationSession session, String content, boolean completed) {
-        if (content == null || content.isEmpty()) return;
+        if (content == null || content.isBlank()) return;
         insertMessage(session, "assistant", content, completed);
     }
 
+    /** 在同一个事务中保存一轮用户消息和服务端确认消息，避免只写入一半。 */
+    @Transactional
+    public void appendTurn(ConversationSession session, String userContent,
+                           String assistantContent, boolean assistantCompleted) {
+        insertMessage(session, "user", userContent, true);
+        if (assistantContent != null && !assistantContent.isBlank()) {
+            insertMessage(session, "assistant", assistantContent, assistantCompleted);
+        }
+    }
+
     private void insertMessage(ConversationSession session, String role, String content, boolean completed) {
+        if (session == null) throw new IllegalArgumentException("会话不能为空");
+        if (content == null || content.isBlank()) throw new IllegalArgumentException("消息内容不能为空");
         ChatMessageEntity message = new ChatMessageEntity();
         message.setConversationDbId(session.databaseId());
         message.setRole(role);
@@ -85,6 +99,9 @@ public class ConversationPersistenceService {
         update.setId(session.databaseId());
         update.setUpdatedAt(message.getCreatedAt());
         conversationMapper.updateById(update);
+        log.info("[conversation] message_saved conversationId={} role={} receivedAt={} completedAt={} completed={}",
+                session.conversationId(), role, completed ? null : message.getCreatedAt(),
+                completed ? message.getCreatedAt() : null, completed);
     }
 
     public static final class ConversationRequestException extends RuntimeException {

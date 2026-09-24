@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.Instant;
 
 /** 单实例 MVP Worker：从 MySQL 队列领取任务，生成完成后把结果保存回私有 OSS。 */
 @Slf4j
@@ -34,21 +35,40 @@ public class ImageJobWorker {
         if (!storage.isConfigured()) return;
         ImageJobService.JobRecord job = jobs.claimNext();
         if (job == null) return;
+        Instant receivedAt = Instant.now();
+        long startedNanos = System.nanoTime();
+        String result = "FAILED";
+        log.info("[image-job] worker_received jobId={} queuedAt={} receivedAt={}",
+                job.id(), job.createdAt(), receivedAt);
         try {
             String apiKey = userKeys.get(new ChatIdentity(job.tenantId(), job.userId(), true)).qwenApiKey();
             String sourceUrl = storage.signedGetUrl(job.sourceObjectKey());
             ZineGenerationService.ProviderGeneration generated = generation
                     .generateFromSourceUrl(sourceUrl, job.mode(), job.language(), job.prompt(), apiKey)
                     .block(Duration.ofMinutes(4));
-            if (generated == null || generated.result() == null || generated.result().imageUrl() == null) {
+            if (generated == null || generated.result() == null
+                    || generated.result().imageUrl() == null || generated.result().imageUrl().isBlank()) {
                 throw new IllegalStateException("图片模型没有返回结果");
             }
             storage.copyRemoteImageToObject(generated.result().imageUrl(), job.outputObjectKey());
             jobs.succeed(job.id(), job.outputObjectKey(), generated.rationale(), generated.result().providerRequestId());
-            log.info("[image-job] completed jobId={}", job.id());
+            result = "SUCCEEDED";
         } catch (Exception error) {
-            log.warn("[image-job] failed jobId={} message={}", job.id(), error.getMessage());
-            jobs.fail(job.id(), error.getMessage(), maxAttempts);
+            log.warn("[image-job] worker_failed jobId={} errorType={} message={}",
+                    job.id(), error.getClass().getSimpleName(), safeMessage(error));
+            jobs.fail(job.id(), safeMessage(error), Math.max(1, maxAttempts));
+        } finally {
+            Instant completedAt = Instant.now();
+            log.info("[image-job] worker_completed jobId={} result={} receivedAt={} completedAt={} durationMs={}",
+                    job.id(), result, receivedAt, completedAt,
+                    Math.max(0, (System.nanoTime() - startedNanos) / 1_000_000));
         }
+    }
+
+    private static String safeMessage(Throwable error) {
+        String message = error == null ? null : error.getMessage();
+        return message == null || message.isBlank()
+                ? (error == null ? "unknown" : error.getClass().getSimpleName())
+                : message.replaceAll("[\\r\\n]+", " ");
     }
 }

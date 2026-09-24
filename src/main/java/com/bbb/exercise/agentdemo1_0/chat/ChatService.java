@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
-    private static final int MAX_QUESTION_LENGTH = 4000;
+    private static final int MAX_QUESTION_CODE_POINTS = 4000;
     private static final String DEFAULT_PROMPT = "请根据这张照片进行一次有创意的二次生成。";
 
     private final ConversationPersistenceService conversations;
@@ -36,35 +37,58 @@ public class ChatService {
 
     public Flux<ChatEventVO> chat(String question, ConversationSession session,
                                   List<ChatAttachmentRequest> attachments) {
+        Instant receivedAt = Instant.now();
+        if (session == null) {
+            return withCompletionLogging(Flux.just(errorEvent("会话无效，请重新开始"), stopEvent()), "unknown", receivedAt);
+        }
         List<ChatAttachmentRequest> images = attachments == null ? List.of() : attachments;
         String invalid = validateQuestion(question, !images.isEmpty());
-        if (invalid != null) return Flux.just(errorEvent(invalid), stopEvent());
-        if (images.size() != 1) return Flux.just(errorEvent("每次只支持一张图片"), stopEvent());
+        if (invalid != null) return withCompletionLogging(Flux.just(errorEvent(invalid), stopEvent()),
+                session.conversationId(), receivedAt);
+        if (images.size() != 1) {
+            return withCompletionLogging(Flux.just(errorEvent("每次只支持一张图片"), stopEvent()),
+                    session.conversationId(), receivedAt);
+        }
+        ChatAttachmentRequest attachment = images.get(0);
+        if (attachment == null || attachment.getAssetId() == null || attachment.getAssetId().isBlank()) {
+            return withCompletionLogging(Flux.just(errorEvent("图片资产 ID 不能为空"), stopEvent()),
+                    session.conversationId(), receivedAt);
+        }
 
         String prompt = question == null || question.isBlank() ? DEFAULT_PROMPT : question.trim();
         String acknowledgement = "已收到照片，正在后台生成一张图片。完成后结果会回到当前对话。";
         String conversationId = session.conversationId();
         Mono<ImageJobService.JobView> create = Mono.fromCallable(() -> {
             ImageJobService.JobView job = imageJobs.create(session.identity(), conversationId, prompt, images);
-            conversations.appendUserMessage(session, prompt);
-            conversations.appendAssistantMessage(session, acknowledgement, true);
+            conversations.appendTurn(session, prompt, acknowledgement, true);
             return job;
         }).subscribeOn(Schedulers.boundedElastic());
 
-        return Flux.concat(Flux.just(sessionInfoEvent(conversationId, session.created())),
+        Flux<ChatEventVO> events = Flux.concat(Flux.just(sessionInfoEvent(conversationId, session.created())),
                         create.flatMapMany(job -> Flux.just(imageJobEvent(job), dataEvent(acknowledgement), stopEvent())))
                 .onErrorResume(error -> {
                     log.warn("[chat] image job creation failed cid={} reason={}", conversationId, error.toString());
                     return Flux.just(errorEvent("图片任务创建失败：" + errorMessage(error)), stopEvent());
                 });
+        return withCompletionLogging(events, conversationId, receivedAt);
     }
 
     public static String validateQuestion(String question, boolean hasAttachments) {
         if (!hasAttachments) return "请先上传图片后再开始创作";
-        if (question != null && question.length() > MAX_QUESTION_LENGTH) {
-            return "问题过长（上限 " + MAX_QUESTION_LENGTH + " 字符）";
+        if (question != null && question.codePointCount(0, question.length()) > MAX_QUESTION_CODE_POINTS) {
+            return "问题过长（上限 " + MAX_QUESTION_CODE_POINTS + " 字符）";
         }
         return null;
+    }
+
+    private static Flux<ChatEventVO> withCompletionLogging(Flux<ChatEventVO> events,
+                                                            String conversationId,
+                                                            Instant receivedAt) {
+        long startedNanos = System.nanoTime();
+        return events.doFinally(signal -> log.info(
+                "[chat] task_completed conversationId={} receivedAt={} completedAt={} durationMs={} signal={}",
+                conversationId, receivedAt, Instant.now(),
+                Math.max(0, (System.nanoTime() - startedNanos) / 1_000_000), signal));
     }
 
     private static String errorMessage(Throwable error) {
@@ -82,6 +106,8 @@ public class ChatService {
         data.put("status", job.status());
         data.put("mode", job.mode());
         data.put("createdAt", job.createdAt());
+        data.put("startedAt", job.startedAt());
+        data.put("completedAt", job.completedAt());
         return ChatEventVO.builder().eventType(ChatEventTypeEnum.IMAGE_JOB.getValue()).eventData(data).build();
     }
 

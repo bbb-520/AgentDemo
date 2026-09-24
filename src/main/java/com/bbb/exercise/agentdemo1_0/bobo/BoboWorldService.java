@@ -43,6 +43,9 @@ public class BoboWorldService {
 
     @Transactional
     public PublishResponse publish(ChatIdentity identity, PublishRequest request) {
+        if (identity == null || !identity.authenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        }
         if (request == null || request.jobId() == null || request.jobId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "jobId 不能为空");
         }
@@ -146,6 +149,12 @@ public class BoboWorldService {
 
     @Transactional
     public MineItem patch(ChatIdentity identity, String itemId, PatchRequest patch) {
+        if (identity == null || !identity.authenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        }
+        if (patch == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求体不能为空");
+        }
         ItemRow row = requireOwned(identity, itemId);
         if ("DELETED".equals(row.status())) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "作品不存在");
         if (patch.version() != row.version()) {
@@ -171,6 +180,9 @@ public class BoboWorldService {
 
     @Transactional
     public void delete(ChatIdentity identity, String itemId) {
+        if (identity == null || !identity.authenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        }
         ItemRow row = requireOwned(identity, itemId);
         if ("DELETED".equals(row.status())) return;
         LocalDateTime now = LocalDateTime.now();
@@ -229,6 +241,9 @@ public class BoboWorldService {
     }
 
     private ItemRow requireOwned(ChatIdentity identity, String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "itemId 不能为空");
+        }
         List<ItemRow> rows = jdbc.query("SELECT b.*,j.prompt AS source_prompt,u.username AS current_username FROM bobo_world_item b "
                         + "LEFT JOIN image_job j ON j.id=b.source_job_id "
                         + "LEFT JOIN app_user u ON b.user_id=CONCAT('user:',u.id) "

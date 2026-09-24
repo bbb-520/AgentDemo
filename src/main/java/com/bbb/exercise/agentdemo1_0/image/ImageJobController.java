@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
 
@@ -24,26 +25,32 @@ public class ImageJobController {
 
     @GetMapping("/{jobId}")
     public Mono<ResponseEntity<ImageJobService.JobView>> get(@PathVariable String jobId, ServerWebExchange exchange) {
-        return identityResolver.resolveRequired(exchange).map(identity -> ResponseEntity.ok(jobs.get(identity, jobId)));
+        return identityResolver.resolveRequired(exchange)
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(jobs.get(identity, jobId))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @GetMapping("/{jobId}/download")
     public Mono<ResponseEntity<Void>> download(@PathVariable String jobId, ServerWebExchange exchange) {
-        return identityResolver.resolveRequired(exchange).map(identity -> ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(jobs.downloadUrl(identity, jobId))).<Void>build());
+        return identityResolver.resolveRequired(exchange)
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.status(HttpStatus.FOUND)
+                        .location(URI.create(jobs.downloadUrl(identity, jobId))).<Void>build()))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @GetMapping
     public Mono<ResponseEntity<java.util.List<ImageJobService.JobView>>> conversation(
             @RequestParam String conversationId, ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.ok(jobs.conversation(identity, conversationId)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(jobs.conversation(identity, conversationId))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @GetMapping("/archive")
     public Mono<ResponseEntity<java.util.List<ImageJobService.JobView>>> archive(
             @RequestParam(defaultValue = "24") int limit, ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.ok(jobs.archive(identity, limit)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(jobs.archive(identity, limit))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

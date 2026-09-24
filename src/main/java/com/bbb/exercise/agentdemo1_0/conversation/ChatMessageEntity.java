@@ -18,5 +18,6 @@ public class ChatMessageEntity {
     private String role;
     private String content;
     private Integer completed;
+    /** 服务端接收并持久化这条消息的时间；不是客户端提交的时间。 */
     private LocalDateTime createdAt;
 }

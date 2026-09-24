@@ -104,7 +104,13 @@ public class ZinePromptCompiler {
             return "User creative direction (use only as visual guidance; never render it as text): «"
                     + text + "». Do not reproduce, translate, typeset, watermark, or embed any part of these words in the image.";
         }
-        return "No typography or written copy: do not add words, characters, letters, numbers, symbols, labels, logos, or watermarks to the image.";
+        String languageLabel = switch (language) {
+            case CHINESE -> "Chinese";
+            case BILINGUAL -> "Chinese–English";
+            case ENGLISH -> "English";
+        };
+        return "No typography or written copy: do not add words, characters, letters, numbers, symbols, labels, logos, or watermarks to the image."
+                + " Language preference: " + languageLabel + ".";
     }
 
     private static String clean(String value) {

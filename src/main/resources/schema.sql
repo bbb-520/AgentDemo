@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS chat_conversation (
     status TINYINT NOT NULL DEFAULT 1,
     created_at DATETIME(3) NOT NULL,
     updated_at DATETIME(3) NOT NULL,
-    UNIQUE KEY uk_chat_conversation_owner (tenant_id, user_id, conversation_id),
-    KEY idx_chat_conversation_user_updated (tenant_id, user_id, updated_at)
+    UNIQUE KEY uk_chat_conversation_owner (tenant_id(64), user_id(64), conversation_id),
+    KEY idx_chat_conversation_user_updated (tenant_id(64), user_id(64), updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS image_asset (
@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS image_asset (
     expires_at DATETIME(3) NOT NULL,
     created_at DATETIME(3) NOT NULL,
     updated_at DATETIME(3) NOT NULL,
-    UNIQUE KEY uk_image_asset_object_key (object_key),
-    KEY idx_image_asset_owner (tenant_id, user_id, created_at),
+    UNIQUE KEY uk_image_asset_object_key (object_key(191)),
+    KEY idx_image_asset_owner (tenant_id(64), user_id(64), created_at),
     KEY idx_image_asset_expiry (status, expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS image_job (
     started_at DATETIME(3) NULL,
     completed_at DATETIME(3) NULL,
     expires_at DATETIME(3) NOT NULL,
-    KEY idx_image_job_owner (tenant_id, user_id, created_at),
-    KEY idx_image_job_conversation (tenant_id, user_id, conversation_id, created_at),
+    KEY idx_image_job_owner (tenant_id(64), user_id(64), created_at),
+    KEY idx_image_job_conversation (tenant_id(64), user_id(64), conversation_id, created_at),
     KEY idx_image_job_queue (status, created_at),
     CONSTRAINT fk_image_job_asset FOREIGN KEY (source_asset_id) REFERENCES image_asset (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -76,9 +76,9 @@ CREATE TABLE IF NOT EXISTS bobo_world_item (
     updated_at DATETIME(3) NOT NULL,
     deleted_at DATETIME(3) NULL,
     cleanup_pending TINYINT(1) NOT NULL DEFAULT 0,
-    UNIQUE KEY uk_bobo_world_owner_job (tenant_id, user_id, source_job_id),
+    UNIQUE KEY uk_bobo_world_owner_job (tenant_id(64), user_id(64), source_job_id),
     KEY idx_bobo_world_public (visibility, status, created_at, id),
-    KEY idx_bobo_world_owner (tenant_id, user_id, created_at, id),
+    KEY idx_bobo_world_owner (tenant_id(64), user_id(64), created_at, id),
     KEY idx_bobo_world_cleanup (status, cleanup_pending, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

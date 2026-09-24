@@ -33,7 +33,9 @@ public class BoboWorldController {
             @RequestBody(required = false) BoboWorldService.PublishRequest request,
             ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.status(HttpStatus.CREATED).body(boboWorld.publish(identity, request)));
+                .flatMap(identity -> Mono.fromCallable(() ->
+                        ResponseEntity.status(HttpStatus.CREATED).body(boboWorld.publish(identity, request))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @GetMapping("/world")
@@ -50,14 +52,16 @@ public class BoboWorldController {
             @RequestParam(required = false) String cursor,
             ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.ok(boboWorld.mine(identity, limit, cursor)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(boboWorld.mine(identity, limit, cursor))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @GetMapping("/items/{itemId}")
     public Mono<ResponseEntity<BoboWorldService.MineItem>> get(
             @PathVariable String itemId, ServerWebExchange exchange) {
         return identityResolver.resolve(exchange)
-                .map(identity -> ResponseEntity.ok(boboWorld.get(identity, itemId)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(boboWorld.get(identity, itemId))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @PatchMapping("/items/{itemId}")
@@ -67,15 +71,18 @@ public class BoboWorldController {
             ServerWebExchange exchange) {
         BoboWorldService.PatchRequest patch = parsePatch(body);
         return identityResolver.resolveRequired(exchange)
-                .map(identity -> ResponseEntity.ok(boboWorld.patch(identity, itemId, patch)));
+                .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(boboWorld.patch(identity, itemId, patch))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @DeleteMapping("/items/{itemId}")
     public Mono<ResponseEntity<Void>> delete(@PathVariable String itemId, ServerWebExchange exchange) {
-        return identityResolver.resolveRequired(exchange).map(identity -> {
-            boboWorld.delete(identity, itemId);
-            return ResponseEntity.noContent().<Void>build();
-        });
+        return identityResolver.resolveRequired(exchange)
+                .flatMap(identity -> Mono.fromCallable(() -> {
+                    boboWorld.delete(identity, itemId);
+                    return ResponseEntity.noContent().<Void>build();
+                }))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     private static BoboWorldService.PatchRequest parsePatch(Map<String, Object> body) {

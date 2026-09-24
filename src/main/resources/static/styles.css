@@ -67,6 +67,11 @@ h1 em { color: var(--blue); font-style: normal; }
 .workbench::after { inset: -9px 11px 13px -7px; transform: rotate(-.7deg); opacity: .65; }
 .workbench-head { display: flex; justify-content: space-between; align-items: end; padding-bottom: 19px; border-bottom: 1px solid var(--line); }
 .workbench-head h2 { margin: 0; font-size: 27px; font-weight: 400; }
+.api-key-panel { display: grid; gap: 12px; margin: 16px 0; padding: 16px; border: 1px solid rgba(73, 56, 39, .2); background: rgba(255, 255, 255, .35); }
+.api-key-panel h2 { margin: 3px 0; font-size: 16px; }
+.api-key-status { margin: 0; font-size: 12px; }
+.api-key-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.api-key-actions input { flex: 1 1 16rem; min-width: 0; padding: 10px; border: 1px solid rgba(73, 56, 39, .3); background: rgba(255, 255, 255, .6); }
 .folio-number { color: var(--ink-soft); font-size: 10px; letter-spacing: .1em; }
 
 .paper-stage { position: relative; min-height: 440px; margin: 24px 0 27px; overflow: hidden; display: grid; place-items: center; background: #e9dfcd; background-image: radial-gradient(rgba(30,28,24,.08) .55px, transparent .55px); background-size: 5px 5px; }
