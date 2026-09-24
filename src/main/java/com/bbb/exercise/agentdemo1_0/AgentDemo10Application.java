@@ -14,7 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * <p>对外提供图片创作、会话、用户作品管理和 Bobo's World 公共分享入口：
  * <ul>
  *   <li>{@code /api/chat} —— 业务对话（SSE 流式）；</li>
- *   <li>{@code /api/bobo-world} —— 公开作品浏览和用户作品管理。</li>
+ *   <li>{@code /api/bobo} —— 公开作品浏览和用户作品管理。</li>
  * </ul>
  */
 @SpringBootApplication

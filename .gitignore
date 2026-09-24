@@ -27,3 +27,7 @@ Thumbs.db
 *.tmp
 *.swp
 *.bak
+
+# 部署密钥（只提交 .env.example）
+.env
+deploy/.env

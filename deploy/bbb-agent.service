@@ -1,0 +1,20 @@
+[Unit]
+Description=BBB Agent Spring Boot application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bbb-agent
+Group=bbb-agent
+WorkingDirectory=/opt/bbb-agent
+EnvironmentFile=/etc/bbb-agent.env
+ExecStart=/usr/bin/java -jar /opt/bbb-agent/app.jar
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
