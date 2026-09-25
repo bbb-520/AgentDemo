@@ -1,8 +1,8 @@
-CREATE DATABASE IF NOT EXISTS bbb_agent_demo
+CREATE DATABASE IF NOT EXISTS bobo_db
     DEFAULT CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
-USE bbb_agent_demo;
+USE bobo_db;
 
 CREATE TABLE IF NOT EXISTS chat_conversation (
     id BIGINT NOT NULL PRIMARY KEY,

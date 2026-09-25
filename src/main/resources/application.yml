@@ -1,5 +1,6 @@
 server:
-  port: 18080
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:18080}
   shutdown: graceful
 
 spring:
@@ -17,9 +18,9 @@ spring:
     # 图片编辑接口默认允许 10 MB 源图，并留出 multipart / JSON 包装余量。
     max-in-memory-size: 12MB
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:bbb_agent_demo}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:123456}
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:bobo_db}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:bobo_user}
+    password: ${MYSQL_PASSWORD:}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
