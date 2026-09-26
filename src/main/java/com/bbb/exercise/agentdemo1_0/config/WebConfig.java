@@ -16,7 +16,7 @@ import java.util.List;
 public class WebConfig {
 
     private static final List<String> ALLOWED_ORIGIN_PATTERNS =
-            List.of("http://localhost:*", "http://127.0.0.1:*");
+            List.of("https://www.boboo.xin", "https://boboo.xin", "http://localhost:*", "http://127.0.0.1:*");
 
     /** 注册响应式 CORS 过滤器，规则作用于 {@code /api/**} */
     @Bean
