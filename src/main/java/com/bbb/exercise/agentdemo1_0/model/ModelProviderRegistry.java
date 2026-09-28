@@ -4,10 +4,16 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.stereotype.Component;
 
 /** Central capability catalogue used by both settings and orchestration. */
+@Component
 public final class ModelProviderRegistry {
     private final Map<ModelProvider, ProviderDescriptor> descriptors;
+
+    public ModelProviderRegistry() {
+        this(defaultRegistry().descriptors);
+    }
 
     public ModelProviderRegistry(Map<ModelProvider, ProviderDescriptor> descriptors) {
         this.descriptors = Map.copyOf(descriptors);
@@ -18,8 +24,8 @@ public final class ModelProviderRegistry {
         values.put(ModelProvider.GPT, descriptor(ModelProvider.GPT, true,
                 "https://api.openai.com/v1", ModelCapability.CHAT, ModelCapability.VISION,
                 ModelCapability.IMAGE, ModelCapability.EMBEDDING));
-        values.put(ModelProvider.GEMINI, descriptor(ModelProvider.GEMINI, false,
-                "https://generativelanguage.googleapis.com", ModelCapability.CHAT,
+        values.put(ModelProvider.GEMINI, descriptor(ModelProvider.GEMINI, true,
+                "https://generativelanguage.googleapis.com/v1beta/openai/", ModelCapability.CHAT,
                 ModelCapability.VISION, ModelCapability.EMBEDDING));
         values.put(ModelProvider.QWEN, descriptor(ModelProvider.QWEN, true,
                 "https://dashscope.aliyuncs.com/compatible-mode/v1", ModelCapability.CHAT,
@@ -28,7 +34,7 @@ public final class ModelProviderRegistry {
                 "https://open.bigmodel.cn/api/paas/v4", ModelCapability.CHAT,
                 ModelCapability.VISION, ModelCapability.EMBEDDING));
         values.put(ModelProvider.HY, descriptor(ModelProvider.HY, true,
-                "", ModelCapability.CHAT, ModelCapability.VISION, ModelCapability.IMAGE,
+                "https://api.hunyuan.cloud.tencent.com/v1", ModelCapability.CHAT, ModelCapability.VISION, ModelCapability.IMAGE,
                 ModelCapability.EMBEDDING));
         return new ModelProviderRegistry(values);
     }

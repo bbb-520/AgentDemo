@@ -5,8 +5,10 @@ import com.bbb.exercise.agentdemo1_0.conversation.ConversationSession;
 import com.bbb.exercise.agentdemo1_0.conversation.ConversationIntent;
 import com.bbb.exercise.agentdemo1_0.dto.ChatAttachmentRequest;
 import com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum;
+import com.bbb.exercise.agentdemo1_0.generation.SceneCard;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
 import com.bbb.exercise.agentdemo1_0.image.ImageJobService;
+import com.bbb.exercise.agentdemo1_0.memory.VisionMemoryService;
 import com.bbb.exercise.agentdemo1_0.vo.ChatEventVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +21,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Coordinates a chat turn while keeping image generation asynchronous. */
 @Slf4j
@@ -30,6 +33,8 @@ public class ChatService {
 
     private final ConversationPersistenceService conversations;
     private final ImageJobService imageJobs;
+    private final ModelConversationService modelConversation;
+    private final VisionMemoryService memories;
 
     public Mono<ConversationSession> openConversation(String sessionId, ChatIdentity identity) {
         return Mono.fromCallable(() -> conversations.openOrCreate(sessionId, identity))
@@ -46,9 +51,12 @@ public class ChatService {
         String invalid = validateQuestion(question, !images.isEmpty());
         if (invalid != null) return withCompletionLogging(Flux.just(errorEvent(invalid), stopEvent()),
                 session.conversationId(), receivedAt);
-        if (images.size() != 1) {
+        if (images.size() > 1) {
             return withCompletionLogging(Flux.just(errorEvent("每次只支持一张图片"), stopEvent()),
                     session.conversationId(), receivedAt);
+        }
+        if (images.isEmpty()) {
+            return textOnly(question, session, receivedAt);
         }
         ChatAttachmentRequest attachment = images.get(0);
         if (attachment == null || attachment.getAssetId() == null || attachment.getAssetId().isBlank()) {
@@ -57,17 +65,8 @@ public class ChatService {
         }
 
         ConversationIntent intent = ConversationIntent.classifyText(question, true, false);
-        if (intent == ConversationIntent.WAIT_FOR_INSTRUCTION) {
-            String conversationId = session.conversationId();
-            String acknowledgement = "已收到这张图片。你可以继续问我画面内容，也可以告诉我想怎样生成或修改。";
-            Mono<Void> save = Mono.fromRunnable(() -> conversations.appendTurn(
-                    session, "[图片已上传]", acknowledgement, true))
-                    .then()
-                    .subscribeOn(Schedulers.boundedElastic());
-            Flux<ChatEventVO> events = Flux.concat(
-                    Flux.just(sessionInfoEvent(conversationId, session.created())),
-                    save.thenMany(Flux.just(waitingEvent(acknowledgement), dataEvent(acknowledgement), stopEvent())));
-            return withCompletionLogging(events, conversationId, receivedAt);
+        if (intent == ConversationIntent.WAIT_FOR_INSTRUCTION || intent == ConversationIntent.DESCRIBE) {
+            return imageAnalysis(question, session, attachment, intent, receivedAt);
         }
 
         String prompt = question == null || question.isBlank() ? DEFAULT_PROMPT : question.trim();
@@ -89,11 +88,53 @@ public class ChatService {
     }
 
     public static String validateQuestion(String question, boolean hasAttachments) {
-        if (!hasAttachments) return "请先上传图片后再开始创作";
+        if (!hasAttachments && (question == null || question.isBlank())) return "问题不能为空";
         if (question != null && question.codePointCount(0, question.length()) > MAX_QUESTION_CODE_POINTS) {
             return "问题过长（上限 " + MAX_QUESTION_CODE_POINTS + " 字符）";
         }
         return null;
+    }
+
+    private Flux<ChatEventVO> textOnly(String question, ConversationSession session, Instant receivedAt) {
+        String conversationId = session.conversationId();
+        String prompt = question.trim();
+        AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());
+        Flux<ChatEventVO> stream = modelConversation.answer(session.identity(), prompt)
+                .doOnNext(answer.get()::append)
+                .map(ChatService::dataEvent)
+                .concatWith(Mono.<ChatEventVO>fromRunnable(() -> conversations.appendTurn(
+                        session, prompt, answer.get().toString(), true))
+                        .subscribeOn(Schedulers.boundedElastic()))
+                .concatWith(Flux.just(stopEvent()))
+                .onErrorResume(error -> Flux.just(errorEvent("对话生成失败：" + errorMessage(error)), stopEvent()));
+        return withCompletionLogging(Flux.concat(
+                Flux.just(sessionInfoEvent(conversationId, session.created())), stream), conversationId, receivedAt);
+    }
+
+    private Flux<ChatEventVO> imageAnalysis(String question, ConversationSession session,
+                                             ChatAttachmentRequest attachment,
+                                             ConversationIntent intent, Instant receivedAt) {
+        String conversationId = session.conversationId();
+        String userContent = question == null || question.isBlank() ? "[图片已上传]" : question.trim();
+        return Flux.concat(
+                Flux.just(sessionInfoEvent(conversationId, session.created())),
+                modelConversation.analyze(session.identity(), attachment)
+                        .flatMapMany(card -> {
+                            String acknowledgement = intent == ConversationIntent.WAIT_FOR_INSTRUCTION
+                                    ? "图片已识别。你可以继续询问画面，也可以告诉我如何生成或修改。"
+                                    : "图片识别完成。";
+                            Mono<Void> save = Mono.fromRunnable(() -> conversations.appendTurn(
+                                    session, userContent, card.summary(), true))
+                                    .then().subscribeOn(Schedulers.boundedElastic());
+                            Mono<Void> remember = Mono.fromRunnable(() -> memories.rememberScene(
+                                    session.identity(), card, question)).then().subscribeOn(Schedulers.boundedElastic());
+                            Flux<ChatEventVO> result = Flux.just(sceneCardEvent(card), dataEvent(acknowledgement));
+                            if (intent == ConversationIntent.WAIT_FOR_INSTRUCTION) {
+                                result = result.concatWith(Flux.just(waitingEvent(acknowledgement)));
+                            }
+                            return save.then(remember).thenMany(result).concatWith(Flux.just(stopEvent()));
+                        })
+                        .onErrorResume(error -> Flux.just(errorEvent("图片识别失败：" + errorMessage(error)), stopEvent())));
     }
 
     private static Flux<ChatEventVO> withCompletionLogging(Flux<ChatEventVO> events,
@@ -133,6 +174,17 @@ public class ChatService {
     private static ChatEventVO waitingEvent(String message) {
         return ChatEventVO.builder().eventType(ChatEventTypeEnum.WAITING_FOR_INSTRUCTION.getValue())
                 .eventData(Map.of("state", "WAITING_FOR_INSTRUCTION", "message", message)).build();
+    }
+
+    private static ChatEventVO sceneCardEvent(SceneCard card) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("summary", card.summary());
+        data.put("subjects", card.subjects());
+        data.put("palette", card.palette());
+        data.put("composition", card.composition());
+        data.put("mood", card.mood());
+        data.put("sourceAssetId", card.sourceAssetId());
+        return ChatEventVO.builder().eventType(ChatEventTypeEnum.SCENE_CARD.getValue()).eventData(data).build();
     }
 
     private static ChatEventVO errorEvent(String message) {
