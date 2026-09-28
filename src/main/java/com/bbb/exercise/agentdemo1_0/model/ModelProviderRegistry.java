@@ -32,7 +32,7 @@ public final class ModelProviderRegistry {
                 ModelCapability.VISION, ModelCapability.IMAGE, ModelCapability.EMBEDDING));
         values.put(ModelProvider.GLM, descriptor(ModelProvider.GLM, true,
                 "https://open.bigmodel.cn/api/paas/v4", ModelCapability.CHAT,
-                ModelCapability.VISION, ModelCapability.EMBEDDING));
+                ModelCapability.VISION, ModelCapability.IMAGE, ModelCapability.EMBEDDING));
         values.put(ModelProvider.HY, descriptor(ModelProvider.HY, true,
                 "https://api.hunyuan.cloud.tencent.com/v1", ModelCapability.CHAT, ModelCapability.VISION, ModelCapability.IMAGE,
                 ModelCapability.EMBEDDING));

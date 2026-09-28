@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS image_job (
     mode VARCHAR(32) NOT NULL DEFAULT 'gathered',
     language VARCHAR(32) NOT NULL DEFAULT 'chinese',
     prompt TEXT NOT NULL,
+    provider VARCHAR(32) NOT NULL DEFAULT 'QWEN',
+    model VARCHAR(128) NOT NULL DEFAULT 'qwen-image-3.0-pro',
     rationale TEXT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'QUEUED',
     provider_request_id VARCHAR(255) NULL,
@@ -110,6 +112,9 @@ CREATE TABLE IF NOT EXISTS user_api_key (
     UNIQUE KEY uk_user_api_key_user (user_id),
     CONSTRAINT fk_user_api_key_user FOREIGN KEY (user_id) REFERENCES app_user (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE image_job ADD COLUMN IF NOT EXISTS provider VARCHAR(32) NOT NULL DEFAULT 'QWEN';
+ALTER TABLE image_job ADD COLUMN IF NOT EXISTS model VARCHAR(128) NOT NULL DEFAULT 'qwen-image-3.0-pro';
 
 CREATE TABLE IF NOT EXISTS user_model_profile (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,

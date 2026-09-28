@@ -3,7 +3,9 @@ package com.bbb.exercise.agentdemo1_0.image;
 import com.bbb.exercise.agentdemo1_0.oss.OssStorageService;
 import com.bbb.exercise.agentdemo1_0.auth.UserApiKeyService;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
-import com.bbb.exercise.agentdemo1_0.zine.ZineGenerationService;
+import com.bbb.exercise.agentdemo1_0.model.ModelCapability;
+import com.bbb.exercise.agentdemo1_0.model.ModelProfileService;
+import com.bbb.exercise.agentdemo1_0.model.ModelProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,8 +25,9 @@ public class ImageJobWorker {
 
     private final ImageJobService jobs;
     private final OssStorageService storage;
-    private final ZineGenerationService generation;
     private final UserApiKeyService userKeys;
+    private final ModelProfileService modelProfiles;
+    private final ImageGenerationProviderRegistry providers;
 
     @Value("${app.image-jobs.max-attempts:2}")
     private int maxAttempts;
@@ -41,17 +44,20 @@ public class ImageJobWorker {
         log.info("[image-job] worker_received jobId={} queuedAt={} receivedAt={}",
                 job.id(), job.createdAt(), receivedAt);
         try {
-            String apiKey = userKeys.get(new ChatIdentity(job.tenantId(), job.userId(), true)).qwenApiKey();
+            ChatIdentity identity = new ChatIdentity(job.tenantId(), job.userId(), true);
+            ModelProvider provider = ModelProvider.parse(job.provider());
+            ModelProfileService.SelectedModel selected = modelProfiles.resolve(identity, ModelCapability.IMAGE);
+            String apiKey = selected == null ? userKeys.get(identity).qwenApiKey() : selected.apiKey();
+            if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("图片模型 API Key 已失效，请重新配置");
             String sourceUrl = storage.signedGetUrl(job.sourceObjectKey());
-            ZineGenerationService.ProviderGeneration generated = generation
-                    .generateFromSourceUrl(sourceUrl, job.mode(), job.language(), job.prompt(), apiKey)
+            ImageGenerationProvider.Result generated = providers.resolve(provider)
+                    .generate(new ImageGenerationProvider.Request(sourceUrl, job.prompt(), apiKey, job.model()))                     
                     .block(Duration.ofMinutes(4));
-            if (generated == null || generated.result() == null
-                    || generated.result().imageUrl() == null || generated.result().imageUrl().isBlank()) {
+            if (generated == null || generated.imageUrl() == null || generated.imageUrl().isBlank()) {
                 throw new IllegalStateException("图片模型没有返回结果");
             }
-            storage.copyRemoteImageToObject(generated.result().imageUrl(), job.outputObjectKey());
-            jobs.succeed(job.id(), job.outputObjectKey(), generated.rationale(), generated.result().providerRequestId());
+            storage.copyRemoteImageToObject(generated.imageUrl(), job.outputObjectKey());
+            jobs.succeed(job.id(), job.outputObjectKey(), generated.rationale(), generated.providerRequestId());
             result = "SUCCEEDED";
         } catch (Exception error) {
             log.warn("[image-job] worker_failed jobId={} errorType={} message={}",

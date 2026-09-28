@@ -2,6 +2,9 @@ package com.bbb.exercise.agentdemo1_0.image;
 
 import com.bbb.exercise.agentdemo1_0.config.OssProperties;
 import com.bbb.exercise.agentdemo1_0.auth.UserApiKeyService;
+import com.bbb.exercise.agentdemo1_0.model.ModelCapability;
+import com.bbb.exercise.agentdemo1_0.model.ModelProfileService;
+import com.bbb.exercise.agentdemo1_0.model.ModelProvider;
 import com.bbb.exercise.agentdemo1_0.dto.ChatAttachmentRequest;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
 import com.bbb.exercise.agentdemo1_0.oss.OssStorageService;
@@ -30,6 +33,7 @@ public class ImageJobService {
     private final OssProperties ossProperties;
     private final OssStorageService storage;
     private final UserApiKeyService userKeys;
+    private final ModelProfileService modelProfiles;
 
     public JobView create(ChatIdentity identity, String conversationId, String question,
                           List<ChatAttachmentRequest> attachments) {
@@ -46,7 +50,12 @@ public class ImageJobService {
         if (question != null && question.codePointCount(0, question.length()) > MAX_PROMPT_CODE_POINTS) {
             throw new IllegalArgumentException("问题过长（上限 " + MAX_PROMPT_CODE_POINTS + " 字符）");
         }
-        if (!userKeys.get(identity).hasQwen()) throw new IllegalStateException("请先在用户页配置阿里云 API Key");
+        ModelProfileService.SelectedModel selected = modelProfiles.resolve(identity, ModelCapability.IMAGE);
+        ModelProvider provider = selected == null ? ModelProvider.QWEN : selected.provider();
+        String model = selected == null ? "qwen-image-3.0-pro" : selected.model();
+        if (selected == null && !userKeys.get(identity).hasQwen()) {
+            throw new IllegalStateException("请先在用户页配置图片生成 Agent 和 API Key");
+        }
         ImageAssetService.AssetRecord source = assets.requireReady(identity, attachment.getAssetId());
         String jobId = UUID.randomUUID().toString();
         String ownerPart = source.objectKey().split("/").length > 1 ? source.objectKey().split("/")[1] : "private";
@@ -55,10 +64,10 @@ public class ImageJobService {
                 + now.toLocalDate() + "/" + jobId + ".png";
         String prompt = question == null || question.isBlank() ? "请根据这张照片进行一次有创意的二次生成。" : question.trim();
         String mode = inferMode(prompt);
-        jdbc.update("INSERT INTO image_job(id,tenant_id,user_id,conversation_id,source_asset_id,source_object_key,output_object_key,mode,language,prompt,status,created_at,expires_at) "
-                        + "VALUES (?,?,?,?,?,?,?,?,?,?,'QUEUED',?,?)",
+        jdbc.update("INSERT INTO image_job(id,tenant_id,user_id,conversation_id,source_asset_id,source_object_key,output_object_key,mode,language,prompt,provider,model,status,created_at,expires_at) "
+                        + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'QUEUED',?,?)",
                 jobId, identity.tenantId(), identity.userId(), conversationId, source.id(), source.objectKey(),
-                outputKey, mode, "chinese", prompt, now, now.plusDays(30));
+                outputKey, mode, "chinese", prompt, provider.name(), model, now, now.plusDays(30));
         log.info("[image-job] task_received jobId={} conversationId={} receivedAt={} mode={}",
                 jobId, conversationId, now, mode);
         return view(identity, jobId);
@@ -166,6 +175,7 @@ public class ImageJobService {
         return new JobRecord(rs.getString("id"), rs.getString("tenant_id"), rs.getString("user_id"),
                 rs.getString("conversation_id"), rs.getString("source_object_key"), rs.getString("output_object_key"),
                 rs.getString("mode"), rs.getString("language"), rs.getString("prompt"), rs.getString("status"),
+                rs.getString("provider"), rs.getString("model"),
                 rs.getString("rationale"), rs.getString("provider_request_id"), rs.getString("error_message"),
                 rs.getTimestamp("created_at").toLocalDateTime(), nullable(rs, "started_at"), nullable(rs, "completed_at"));
     }
@@ -183,7 +193,7 @@ public class ImageJobService {
 
     public record JobRecord(String id, String tenantId, String userId, String conversationId,
                             String sourceObjectKey, String outputObjectKey, String mode, String language,
-                            String prompt, String status, String rationale, String providerRequestId,
+                            String prompt, String status, String provider, String model, String rationale, String providerRequestId,
                             String errorMessage,
                             /** 服务端创建队列任务的时间。 */ LocalDateTime createdAt,
                             /** Worker 成功领取任务的时间。 */ LocalDateTime startedAt,
