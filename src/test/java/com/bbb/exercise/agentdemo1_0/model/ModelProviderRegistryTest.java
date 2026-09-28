@@ -27,9 +27,9 @@ class ModelProviderRegistryTest {
         ModelProviderRegistry registry = ModelProviderRegistry.defaultRegistry();
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> registry.resolve(ModelProvider.GLM, ModelCapability.IMAGE, "glm-4"));
+                () -> registry.resolve(ModelProvider.GEMINI, ModelCapability.IMAGE, "gemini-image"));
 
-        assertTrue(error.getMessage().contains("GLM"));
+        assertTrue(error.getMessage().contains("GEMINI"));
         assertTrue(error.getMessage().contains("IMAGE"));
     }
 
