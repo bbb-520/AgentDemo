@@ -72,7 +72,20 @@ public class ModelProfileService {
                 (rs, rowNum) -> new SelectedModel(ModelProvider.parse(rs.getString("provider")),
                         ModelCapability.parse(rs.getString("capability")), rs.getString("model"),
                         crypto.decrypt(rs.getString("api_key_ciphertext"))), userId, capability.name());
-        return rows.isEmpty() ? null : rows.get(0);
+        if (!rows.isEmpty()) return rows.get(0);
+        // A single multimodal model profile can serve both chat and vision.
+        if (capability == ModelCapability.VISION) {
+            List<SelectedModel> chat = jdbc.query("SELECT provider,capability,model,api_key_ciphertext,enabled "
+                            + "FROM user_model_profile WHERE user_id=? AND capability='CHAT' AND enabled=1",
+                    (rs, rowNum) -> new SelectedModel(ModelProvider.parse(rs.getString("provider")),
+                            ModelCapability.VISION, rs.getString("model"), crypto.decrypt(rs.getString("api_key_ciphertext"))), userId);
+            if (!chat.isEmpty()) {
+                SelectedModel candidate = chat.get(0);
+                registry.resolve(candidate.provider(), ModelCapability.VISION, candidate.model());
+                return candidate;
+            }
+        }
+        return null;
     }
 
     public record SaveRequest(String provider, String capability, String model, String apiKey) {}
