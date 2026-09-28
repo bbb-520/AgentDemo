@@ -2,6 +2,7 @@ package com.bbb.exercise.agentdemo1_0.image;
 
 import com.bbb.exercise.agentdemo1_0.model.ModelProvider;
 import com.bbb.exercise.agentdemo1_0.zine.DashScopeImageGenerationClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
@@ -12,6 +13,7 @@ import java.util.Map;
 public final class ImageGenerationProviderRegistry {
     private final Map<ModelProvider, ImageGenerationProvider> providers;
 
+    @Autowired
     public ImageGenerationProviderRegistry(DashScopeImageGenerationClient dashScope) {
         EnumMap<ModelProvider, ImageGenerationProvider> values = new EnumMap<>(ModelProvider.class);
         values.put(ModelProvider.QWEN, new DashScopeImageGenerationProvider(dashScope));
