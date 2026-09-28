@@ -2,6 +2,7 @@ package com.bbb.exercise.agentdemo1_0.chat;
 
 import com.bbb.exercise.agentdemo1_0.conversation.ConversationPersistenceService;
 import com.bbb.exercise.agentdemo1_0.conversation.ConversationSession;
+import com.bbb.exercise.agentdemo1_0.conversation.ConversationIntent;
 import com.bbb.exercise.agentdemo1_0.dto.ChatAttachmentRequest;
 import com.bbb.exercise.agentdemo1_0.enums.ChatEventTypeEnum;
 import com.bbb.exercise.agentdemo1_0.identity.ChatIdentity;
@@ -19,7 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** A chat turn creates exactly one image remix job from one uploaded image. */
+/** Coordinates a chat turn while keeping image generation asynchronous. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -53,6 +54,20 @@ public class ChatService {
         if (attachment == null || attachment.getAssetId() == null || attachment.getAssetId().isBlank()) {
             return withCompletionLogging(Flux.just(errorEvent("图片资产 ID 不能为空"), stopEvent()),
                     session.conversationId(), receivedAt);
+        }
+
+        ConversationIntent intent = ConversationIntent.classifyText(question, true, false);
+        if (intent == ConversationIntent.WAIT_FOR_INSTRUCTION) {
+            String conversationId = session.conversationId();
+            String acknowledgement = "已收到这张图片。你可以继续问我画面内容，也可以告诉我想怎样生成或修改。";
+            Mono<Void> save = Mono.fromRunnable(() -> conversations.appendTurn(
+                    session, "[图片已上传]", acknowledgement, true))
+                    .then()
+                    .subscribeOn(Schedulers.boundedElastic());
+            Flux<ChatEventVO> events = Flux.concat(
+                    Flux.just(sessionInfoEvent(conversationId, session.created())),
+                    save.thenMany(Flux.just(waitingEvent(acknowledgement), dataEvent(acknowledgement), stopEvent())));
+            return withCompletionLogging(events, conversationId, receivedAt);
         }
 
         String prompt = question == null || question.isBlank() ? DEFAULT_PROMPT : question.trim();
@@ -113,6 +128,11 @@ public class ChatService {
 
     private static ChatEventVO stopEvent() {
         return ChatEventVO.builder().eventType(ChatEventTypeEnum.STOP.getValue()).build();
+    }
+
+    private static ChatEventVO waitingEvent(String message) {
+        return ChatEventVO.builder().eventType(ChatEventTypeEnum.WAITING_FOR_INSTRUCTION.getValue())
+                .eventData(Map.of("state", "WAITING_FOR_INSTRUCTION", "message", message)).build();
     }
 
     private static ChatEventVO errorEvent(String message) {
