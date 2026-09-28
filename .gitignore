@@ -17,6 +17,7 @@ build/
 # Agent 私有工作日志（不入仓）
 .workbuddy/memory/*.md
 !/.workbuddy/memory/MEMORY.md
+.superpowers/
 
 # 系统
 .DS_Store
