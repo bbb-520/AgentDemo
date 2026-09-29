@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
+import java.util.List;
 
 /** 图片生成任务状态、会话任务与作品档案接口。 */
 @RestController
@@ -39,7 +40,7 @@ public class ImageJobController {
     }
 
     @GetMapping
-    public Mono<ResponseEntity<java.util.List<ImageJobService.JobView>>> conversation(
+    public Mono<ResponseEntity<List<ImageJobService.JobView>>> conversation(
             @RequestParam String conversationId, ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
                 .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(jobs.conversation(identity, conversationId))))
@@ -47,7 +48,7 @@ public class ImageJobController {
     }
 
     @GetMapping("/archive")
-    public Mono<ResponseEntity<java.util.List<ImageJobService.JobView>>> archive(
+    public Mono<ResponseEntity<List<ImageJobService.JobView>>> archive(
             @RequestParam(defaultValue = "24") int limit, ServerWebExchange exchange) {
         return identityResolver.resolveRequired(exchange)
                 .flatMap(identity -> Mono.fromCallable(() -> ResponseEntity.ok(jobs.archive(identity, limit))))

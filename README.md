@@ -147,8 +147,16 @@ mvn spring-boot:run
 mvn -DskipTests package
 
 # 运行打包产物
-java -jar target/agentDemo1_0-0.0.1-SNAPSHOT.jar
+java -jar agent-chat-legacy/target/BoboWorld4J-app-0.0.1-SNAPSHOT.jar
 ```
+
+当前多模块工作区中 `agent-common` 的测试源码需要额外的 Jackson 测试依赖；如果只构建生产 jar、暂不运行测试，使用下面的命令可以跳过测试编译：
+
+```powershell
+mvn -Dmaven.test.skip=true package
+```
+
+这不会跳过主代码编译；正式发布前仍应在具备完整测试依赖的 CI 环境执行 `mvn test`。
 
 服务默认监听 `127.0.0.1:18080`；反向代理部署时，建议只对外暴露 Nginx/网关，并将 `/api` 转发到该端口。
 
@@ -182,3 +190,68 @@ mvn -DskipTests package
 - 为每个模型配置增加可用性探测、能力校验和配额提示。
 - 将异步 Worker 的状态事件接入消息队列或 SSE，减少前端轮询。
 
+## 微服务生产基线（本地部署）
+
+当前工程已增加以下模块和基础设施：
+
+- `agent-gateway`：WebFlux 网关、Nacos 服务发现、请求 ID 和路由。
+- `agent-auth-service`、`agent-chat-service`、`agent-media-service`、`agent-content-service`：业务服务骨架。
+- `agent-model-core`：模型能力和路由公共库，不单独部署为模型微服务。
+- `agent-orchestrator-service`：多 Agent 任务和 AgentRevise 状态机骨架。
+- `infra/docker-compose.yml`：Nacos、Sentinel Dashboard、MySQL、Redis。
+
+当前根应用继续作为兼容性的 `agent-chat-service` 运行，因此原有 `/api/**` 接口不需要立即迁移。服务拆分采用渐进式迁移，避免一次性复制数据库和业务状态。
+
+### 本地启动
+
+```powershell
+Copy-Item .env.example .env
+docker compose -f infra/docker-compose.yml up -d
+mvn -DskipTests package
+docker compose -f infra/docker-compose.yml -f docker-compose.app.yml up -d --build
+.\scripts\smoke-test.ps1
+```
+
+详细说明见 [`docs/deployment/local-compose.md`](docs/deployment/local-compose.md) 和 [`docs/deployment/server-deploy.md`](docs/deployment/server-deploy.md)。
+
+### 生产注意事项
+
+- 保持 Spring Boot 4.1.1，不在未完成兼容性验证前升级或降级。
+- 注意：SCA 2025.1.0.0 官方适配表面向 Boot 4.0.x；Boot 4.1.1 的组合必须先在目标环境完成依赖和启动验证。
+- Nacos、Sentinel、MySQL 和 Redis 只开放内网访问。
+- 使用环境变量或 Secret 注入数据库密码、OSS 密钥和模型 API Key。
+- 本地验收完成并完成服务器健康检查后，再提交 GitHub。
+
+## 当前线上环境的升级方式
+
+当前生产环境采用“单体兼容应用 + Nginx”的部署形态，而不是直接使用 Gateway 微服务入口：
+
+```text
+Nginx HTTPS
+  ├─ /var/www/AgentWebDemo        前端静态文件
+  └─ /api/* → 127.0.0.1:18080    agent-chat-legacy jar
+                                  ├─ MySQL bobo_db
+                                  ├─ Redis 127.0.0.1:6379
+                                  └─ Aliyun OSS / 用户模型 Provider
+```
+
+systemd 服务使用 `/opt/bbb-agent/app.jar`，环境变量来自 `/etc/bbb-agent.env`。当前服务器没有运行 Nacos，因此兼容单体模式需在该 EnvironmentFile 中设置 `SPRING_CLOUD_NACOS_DISCOVERY_ENABLED=false`、`SPRING_CLOUD_NACOS_CONFIG_ENABLED=false` 和 `SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED=false`；启用微服务基线时再移除这些覆盖并配置真实 Nacos 地址。因此常规版本更新只需要：
+
+1. 在本地执行 `mvn -DskipTests package`。
+2. 上传 `agent-chat-legacy/target/BoboWorld4J-app-0.0.1-SNAPSHOT.jar` 到服务器临时路径。
+3. 备份当前 jar 和数据库后，用新 jar 原子替换 `/opt/bbb-agent/app.jar`。
+4. 重启 `bbb-agent.service`，检查 `/health`、登录、SSE、图片上传和图片任务。
+
+不要用本地 `application.yml` 覆盖服务器 `/etc/bbb-agent.env`，也不要重复初始化已经存在的 `bobo_db`。升级前先确认 `image_job` 已包含 `provider` 和 `model` 字段；当前线上数据库已完成该迁移。
+
+回滚时恢复 `/opt/bbb-agent/releases/` 中的上一版 jar，再重启 `bbb-agent.service`。Nginx 配置和前端目录只有在对应文件发生变化时才需要更新。
+
+数据库备份建议使用 MySQL 账号可执行的选项：
+
+```bash
+mysqldump --no-tablespaces --single-transaction bobo_db | gzip > bobo_db-backup.sql.gz
+```
+
+`--no-tablespaces` 可避免仅具备业务库权限的账号因缺少全局 `PROCESS` 权限导致备份不完整。
+
+> 安全提示：服务器 IP、密码、数据库密码、OSS Secret 和模型 API Key 不写入 README 或 Git。生产环境的 `.env`、systemd EnvironmentFile 和密钥由服务器单独保管。

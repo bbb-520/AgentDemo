@@ -10,10 +10,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ApiKeyFlowContractTest {
 
+    private static Path resource(String relativePath) {
+        Path direct = Path.of("src", "main", "resources", relativePath);
+        if (Files.exists(direct)) {
+            return direct;
+        }
+        return Path.of("..", "src", "main", "resources", relativePath);
+    }
+
     @Test
     void pageProvidesAKeyInputAndPersistsItThroughTheSettingsEndpoint() throws Exception {
-        String html = Files.readString(Path.of("src/main/resources/static/index.html"), StandardCharsets.UTF_8);
-        String javascript = Files.readString(Path.of("src/main/resources/static/app.js"), StandardCharsets.UTF_8);
+        String html = Files.readString(resource("static/index.html"), StandardCharsets.UTF_8);
+        String javascript = Files.readString(resource("static/app.js"), StandardCharsets.UTF_8);
 
         assertThat(html).contains("id=\"qwen-api-key\"");
         assertThat(javascript).contains("/api/settings/keys");
@@ -23,7 +31,7 @@ class ApiKeyFlowContractTest {
 
     @Test
     void globalOpenAiAutoConfigurationIsDisabledBecauseKeysAreUserScoped() throws Exception {
-        String yaml = Files.readString(Path.of("src/main/resources/application.yml"), StandardCharsets.UTF_8);
+        String yaml = Files.readString(resource("application.yml"), StandardCharsets.UTF_8);
 
         assertThat(yaml).contains("org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration");
         assertThat(yaml).contains("org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration");

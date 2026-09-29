@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.bbb.exercise</groupId>
+        <artifactId>BoboWorld4J</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>BoboWorld4J-app</artifactId>
+    <name>BoboWorld4J-app</name>
+
+    <!-- 兼容迁移：先复用根 src，后续按领域逐步移动到独立服务。 -->
+    <build>
+        <sourceDirectory>${project.basedir}/../src/main/java</sourceDirectory>
+        <testSourceDirectory>${project.basedir}/../src/test/java</testSourceDirectory>
+        <resources>
+            <resource>
+                <directory>${project.basedir}/../src/main/resources</directory>
+            </resource>
+        </resources>
+        <testResources>
+            <testResource>
+                <directory>${project.basedir}/../src/test/resources</directory>
+            </testResource>
+        </testResources>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

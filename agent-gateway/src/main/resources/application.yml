@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: agent-gateway
+  config:
+    import: optional:nacos:agent-gateway.yml?group=AGENT_GROUP&refreshEnabled=true
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: AGENT_GROUP
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: AGENT_GROUP
+    sentinel:
+      eager: true
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8080}
+        port: ${SENTINEL_CLIENT_PORT:8719}
+  main:
+    web-application-type: reactive
+server:
+  port: ${SERVER_PORT:18000}
+  shutdown: graceful
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

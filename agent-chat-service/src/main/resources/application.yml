@@ -1,0 +1,14 @@
+spring:
+  application.name: agent-chat-service
+  config.import: optional:nacos:agent-chat-service.yml?group=AGENT_GROUP&refreshEnabled=true
+  cloud:
+    compatibility-verifier.enabled: false
+    nacos:
+      discovery.server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      config.server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+server:
+  port: ${SERVER_PORT:18085}
+  shutdown: graceful
+management:
+  endpoints.web.exposure.include: health,info,metrics,prometheus
+  endpoint.health.probes.enabled: true

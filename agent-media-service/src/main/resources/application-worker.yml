@@ -1,0 +1,13 @@
+spring:
+  config:
+    activate:
+      on-profile: worker
+  task:
+    scheduling:
+      pool:
+        size: ${IMAGE_WORKER_POOL_SIZE:2}
+app:
+  image-jobs:
+    enabled: ${IMAGE_JOBS_ENABLED:true}
+    poll-interval: ${IMAGE_JOBS_POLL_INTERVAL:3000ms}
+    lease-duration: ${IMAGE_JOBS_LEASE_DURATION:5m}

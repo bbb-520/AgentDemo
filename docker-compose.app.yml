@@ -1,0 +1,95 @@
+services:
+  agent-chat-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.chat
+    environment:
+      SERVER_PORT: 18080
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
+      SENTINEL_DASHBOARD: sentinel-dashboard:8858
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-agent}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:-agent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change-redis-me}
+    ports:
+      - "18080:18080"
+    depends_on:
+      nacos: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  agent-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        JAR_FILE: agent-gateway/target/agent-gateway-0.0.1-SNAPSHOT.jar
+    environment:
+      SERVER_PORT: 18000
+      NACOS_SERVER_ADDR: nacos:8848
+      SENTINEL_DASHBOARD: sentinel-dashboard:8858
+    ports:
+      - "18000:18000"
+    depends_on:
+      nacos: { condition: service_healthy }
+
+  agent-auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        JAR_FILE: agent-auth-service/target/agent-auth-service-0.0.1-SNAPSHOT.jar
+    environment:
+      SERVER_PORT: 18081
+      NACOS_SERVER_ADDR: nacos:8848
+    ports:
+      - "18081:18081"
+    depends_on:
+      nacos: { condition: service_healthy }
+
+  agent-media-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        JAR_FILE: agent-media-service/target/agent-media-service-0.0.1-SNAPSHOT.jar
+    environment:
+      SERVER_PORT: 18082
+      NACOS_SERVER_ADDR: nacos:8848
+      SENTINEL_DASHBOARD: sentinel-dashboard:8858
+    ports:
+      - "18082:18082"
+    depends_on:
+      nacos: { condition: service_healthy }
+
+  agent-content-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        JAR_FILE: agent-content-service/target/agent-content-service-0.0.1-SNAPSHOT.jar
+    environment:
+      SERVER_PORT: 18083
+      NACOS_SERVER_ADDR: nacos:8848
+    ports:
+      - "18083:18083"
+    depends_on:
+      nacos: { condition: service_healthy }
+
+  agent-orchestrator-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        JAR_FILE: agent-orchestrator-service/target/agent-orchestrator-service-0.0.1-SNAPSHOT.jar
+    environment:
+      SERVER_PORT: 18084
+      NACOS_SERVER_ADDR: nacos:8848
+    ports:
+      - "18084:18084"
+    depends_on:
+      nacos: { condition: service_healthy }

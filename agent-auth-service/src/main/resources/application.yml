@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: agent-auth-service
+  config:
+    import: optional:nacos:agent-auth-service.yml?group=AGENT_GROUP&refreshEnabled=true
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+server:
+  port: ${SERVER_PORT:18081}
+  shutdown: graceful
+management:
+  endpoints.web.exposure.include: health,info,metrics,prometheus
+  endpoint.health.probes.enabled: true

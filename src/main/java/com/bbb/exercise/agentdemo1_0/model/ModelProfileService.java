@@ -25,7 +25,8 @@ public class ModelProfileService {
     public List<ModelProfile> list(ChatIdentity identity) {
         long userId = auth.requireUserId(identity);
         return jdbc.query("SELECT provider,capability,model,enabled,api_key_ciphertext "
-                        + "FROM user_model_profile WHERE user_id=? ORDER BY capability",
+                        + "FROM user_model_profile WHERE user_id=? ORDER BY capability" +
+                        "",
                 (rs, rowNum) -> new ModelProfile(
                         ModelProvider.parse(rs.getString("provider")),
                         ModelCapability.parse(rs.getString("capability")),

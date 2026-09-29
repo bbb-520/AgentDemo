@@ -4,6 +4,30 @@ server:
   shutdown: graceful
 
 spring:
+  application:
+    name: agent-chat-service
+  config:
+    import: optional:nacos:agent-chat-service.yml?group=AGENT_GROUP&refreshEnabled=true
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: AGENT_GROUP
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: AGENT_GROUP
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8080}
+        port: ${SENTINEL_CLIENT_PORT:8720}
+  main:
+    web-application-type: reactive
   # API keys are user-scoped and loaded per request. Do not create the
   # unused singleton OpenAI clients, which require a server-wide key at boot.
   autoconfigure:
@@ -60,6 +84,17 @@ logging:
     root: INFO
     org.springframework.ai: INFO
     org.springframework.ai.chat.client: INFO
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
 
 app:
   oss:
